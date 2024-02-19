@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 120
+exclude = ["__init__.py"]
+
+[project]
+name = "leaky"
+version = "0.1.0"
+authors = [{ "name" = "Yiming Zhang" }]
+requires-python = ">=3.9"
+description = "An unoptimized implementation of Google's Pauli+ simulator."
+readme = "README.md"
+
+dependencies = ["cirq", "stim"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
