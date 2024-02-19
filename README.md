@@ -1,2 +1,3 @@
-# pauli_plus
-An implementation of Google's Pauli+ simulator
+# leaky
+
+An unoptimized implementation of Google's Pauli+ simulator
