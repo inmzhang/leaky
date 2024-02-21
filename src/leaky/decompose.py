@@ -115,7 +115,7 @@ def _add_transition(
         record[initial_status][transition] = prev_prob + prob
 
 
-def project_kraus_operators(
+def decompose_kraus_operators(
     kraus_operators: Sequence[np.ndarray], num_qubits: int, num_level: int
 ) -> dict[LeakageStatus, list[Transition]]:
     all_status = list(itertools.product(range(num_level - 1), repeat=num_qubits))
