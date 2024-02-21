@@ -73,6 +73,8 @@ def _add_transition(
         probs.append(probability)
     else:
         for i, p in enumerate(pauli_channel):
+            if p < 1e-9:
+                continue
             transitions.append((final_status, i))
             probs.append(p)
     for transition, prob in zip(transitions, probs):
