@@ -7,8 +7,9 @@ LeakageStatus = tuple[int, ...]
 
 @dataclasses.dataclass(frozen=True)
 class Transition:
-    probability: float
+    initial_status: LeakageStatus
     final_status: LeakageStatus
+    probability: float
     pauli_channel_idx: int | None = None
 
 
