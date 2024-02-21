@@ -1,9 +1,12 @@
+import itertools
+
 import numpy as np
 
-from leaky.decompose import get_projector_slice, project_kraus
+from leaky.decompose import get_projector_slice, project_kraus_operators
+from leaky.transition import TransitionTable
 
 
-def assert_float_equal(a, b):
+def assert_float_equal(a: float, b: float):
     assert abs(a - b) < 1e-6
 
 
@@ -26,20 +29,19 @@ def test_single_qubit_unitary_decompose():
         ],
         dtype=complex,
     )
-    table = project_kraus(U, 1, 4)
-    # C -> C; I
-    assert_float_equal(table.get((0,), (0,), 0), np.cos(theta / 2) ** 4)
-    # C -> C; X
-    assert_float_equal(table.get((0,), (0,), 1), 0)
-    # C -> C; Y
-    assert_float_equal(table.get((0,), (0,), 2), 0)
-    # C -> C; Z
-    assert_float_equal(table.get((0,), (0,), 3), np.sin(theta / 2) ** 4)
-    # C -> 2
-    assert_float_equal(table.get((0,), (1,)), np.sin(theta) ** 2 / 2)
-    # 2 -> C
-    assert_float_equal(table.get((1,), (0,)), np.sin(theta) ** 2)
-    # 2 -> 2
-    assert_float_equal(table.get((1,), (1,)), np.cos(theta) ** 2)
-    # 3 -> 3
-    assert_float_equal(table.get((2,), (2,)), 1)
+    transitions = project_kraus_operators([U], 1, 4)
+    table = TransitionTable(transitions)
+    equality_check = {
+        ((0,), (0,), 0): np.cos(theta / 2) ** 4,
+        ((0,), (0,), 3): np.sin(theta / 2) ** 4,
+        ((0,), (1,), None): np.sin(theta) ** 2 / 2,
+        ((1,), (0,), None): np.sin(theta) ** 2,
+        ((1,), (1,), None): np.cos(theta) ** 2,
+        ((2,), (2,), None): 1,
+    }
+    for initial, final in itertools.product(range(3), repeat=2):
+        for pauli_idx in [0, 1, 2, 3, None]:
+            expected_prob = equality_check.get(((initial,), (final,), pauli_idx), 0)
+            computed_prob = table.get_transition_prob((initial,), (final,), pauli_idx)
+            assert_float_equal(expected_prob, computed_prob)
+         
