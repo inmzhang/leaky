@@ -35,7 +35,9 @@ class ReadoutStrategy(Enum):
 
 
 class Simulator:
-    def __init__(self, num_qubits: int, tables: dict[str, TransitionTable] | None, seed: int | None) -> None:
+    def __init__(
+        self, num_qubits: int, tables: dict[str, TransitionTable] | None = None, seed: int | None = None
+    ) -> None:
         self._tables = tables or dict()
         self._status_vec = StatusVec(num_qubits)
         self._rng = np.random.default_rng(seed)
