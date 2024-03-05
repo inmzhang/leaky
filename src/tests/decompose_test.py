@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from leaky.decompose import get_projector_slice, decompose_kraus_operators, PAULIS, TWO_QUBITS_PAULIS
-from leaky.transition import TransitionTable
 
 
 def assert_float_equal(a: float, b: float):
@@ -34,8 +33,7 @@ def test_single_qubit_depolarize_decompose():
         channel_probs_list.append(probs)
     for channel_probs in channel_probs_list:
         depolarize_channel = [np.sqrt(p) * pauli for p, pauli in zip(channel_probs, PAULIS)]
-        transitions = decompose_kraus_operators(depolarize_channel, 1, 2)
-        table = TransitionTable(transitions)
+        table = decompose_kraus_operators(depolarize_channel, 1, 2)
         for i, p in enumerate(channel_probs):
             assert table.get_transition_prob((0,), (0,), i) == pytest.approx(p)
 
@@ -58,8 +56,7 @@ def test_phase_damping_channel_decompose():
             dtype=complex,
         ),
     ]
-    transitions = decompose_kraus_operators(kraus_operators, 1, 2)
-    table = TransitionTable(transitions)
+    table = decompose_kraus_operators(kraus_operators, 1, 2)
     table.get_transition_prob((0,), (0,), 0) == pytest.approx((1 + np.sqrt(1 - k)) / 2)
     table.get_transition_prob((0,), (0,), 3) == pytest.approx((1 - np.sqrt(1 - k)) / 2)
 
@@ -72,8 +69,7 @@ def test_two_qubit_depolarize_decompose():
         channel_probs_list.append(probs)
     for channel_probs in channel_probs_list:
         depolarize_channel = [np.sqrt(p) * pauli for p, pauli in zip(channel_probs, TWO_QUBITS_PAULIS)]
-        transitions = decompose_kraus_operators(depolarize_channel, 2, 2)
-        table = TransitionTable(transitions)
+        table = decompose_kraus_operators(depolarize_channel, 2, 2)
         for i, p in enumerate(channel_probs):
             assert table.get_transition_prob((0, 0), (0, 0), i) == pytest.approx(p)
 
@@ -91,8 +87,7 @@ U = np.array(
 
 
 def test_single_qubit_4level_unitary_decompose():
-    transitions = decompose_kraus_operators([U], 1, 4)
-    table = TransitionTable(transitions)
+    table = decompose_kraus_operators([U], 1, 4)
     equality_check = {
         ((0,), (0,), 0): np.cos(THETA / 2) ** 4,
         ((0,), (0,), 3): np.sin(THETA / 2) ** 4,
@@ -109,8 +104,7 @@ def test_single_qubit_4level_unitary_decompose():
 
 
 def test_two_qubit_4level_unitary_decompose():
-    transitions = decompose_kraus_operators([np.kron(U, U)], 2, 4)
-    table = TransitionTable(transitions)
+    table = decompose_kraus_operators([np.kron(U, U)], 2, 4)
     equality_check = {
         ((0, 0), (0, 0), 0): np.cos(THETA / 2) ** 8,
         ((0, 0), (0, 0), 15): np.sin(THETA / 2) ** 8,

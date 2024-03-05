@@ -5,7 +5,7 @@ import functools
 
 import numpy as np
 
-from leaky.transition import Transition, LeakageStatus
+from leaky.transition import Transition, LeakageStatus, TransitionTable
 
 
 ProjectStatus = tuple[tuple[int], ...]
@@ -117,7 +117,7 @@ def _add_transition(
 
 def decompose_kraus_operators(
     kraus_operators: Sequence[np.ndarray], num_qubits: int, num_level: int
-) -> dict[LeakageStatus, list[Transition]]:
+) -> TransitionTable:
     all_status = list(itertools.product(range(num_level - 1), repeat=num_qubits))
     record: dict[LeakageStatus, dict[tuple[LeakageStatus, int | None], float]] = dict()
     for kraus in kraus_operators:
@@ -152,4 +152,4 @@ def decompose_kraus_operators(
         initial_status: [Transition(initial_status, final_status, p, i) for (final_status, i), p in trans_dict.items()]
         for initial_status, trans_dict in record.items()
     }
-    return transitions
+    return TransitionTable(transitions)
