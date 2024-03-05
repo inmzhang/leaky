@@ -1,8 +1,20 @@
+from __future__ import annotations
+from enum import Enum, auto
 import dataclasses
+import itertools
 
 import numpy as np
 
+PAULI_STRINGS = ["I", "X", "Y", "Z"]
+
 LeakageStatus = tuple[int, ...]
+
+
+class TransitionType(Enum):
+    R = auto()
+    U = auto()
+    D = auto()
+    L = auto()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -12,11 +24,29 @@ class Transition:
     probability: float
     pauli_channel_idx: int | None = None
 
+    def get_transition_types(self) -> list[TransitionType]:
+        transition_types = []
+        for init, final in zip(self.initial_status, self.final_status):
+            if init == 0 and final == 0:
+                transition_types.append(TransitionType.R)
+            elif init == 0 and final > 0:
+                transition_types.append(TransitionType.U)
+            elif init > 0 and final == 0:
+                transition_types.append(TransitionType.D)
+            else:
+                transition_types.append(TransitionType.L)
 
-@dataclasses.dataclass(frozen=True)
+    def get_pauli_channel_name(self, is_single_qubit_channel: bool) -> tuple[str] | None:
+        if self.pauli_channel_idx is None:
+            return None
+        if is_single_qubit_channel:
+            return (PAULI_STRINGS[self.pauli_channel_idx],)
+        return itertools.product(PAULI_STRINGS, repeat=2)[self.pauli_channel_idx]
+
+
+@dataclasses.dataclass
 class TransitionTable:
     transitions: dict[LeakageStatus, list[Transition]]
-    rng: np.random.Generator = dataclasses.field(default_factory=np.random.default_rng)
 
     def get_transition_prob(
         self, initial_status: LeakageStatus, final_status: LeakageStatus, pauli_channel_idx: int | None
@@ -26,7 +56,7 @@ class TransitionTable:
                 return t.probability
         return 0.0
 
-    def sample(self, initial_status: LeakageStatus) -> Transition:
+    def sample(self, initial_status: LeakageStatus, rng: np.random.Generator) -> Transition:
         transitions = self.transitions[initial_status]
         probabilities = [t.probability for t in transitions]
-        return self.rng.choice(transitions, p=probabilities)
+        return rng.choice(transitions, p=probabilities)
