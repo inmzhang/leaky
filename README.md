@@ -1,3 +1,3 @@
 # leaky
 
-An unoptimized implementation of Google's Pauli+ simulator
+An unoptimized(slow) implementation of Google's Pauli+ simulator
