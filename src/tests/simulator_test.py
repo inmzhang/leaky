@@ -32,7 +32,7 @@ def test_do_noiseless_circuit():
 
 @pytest.mark.parametrize(
     "gate",
-    ["MX", "MY", "RX", "RY", "MR", "MRX", "MRZ", "MRY", "MPP"],
+    ["MX", "MY", "RX", "RY", "MRX", "MRY", "MPP"],
 )
 def test_raise_not_supported_error(gate):
     simulator = Simulator(1)

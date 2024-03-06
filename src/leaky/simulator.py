@@ -151,7 +151,10 @@ class Simulator:
         if instruction_name in ["R", "RZ"]:
             self.reset(instruction_targets)
             return
-        if instruction_name in ["MX", "MY", "RX", "RY", "MR", "MRX", "MRZ", "MRY", "MPP"]:
+        if instruction_name in ["MR", "MRZ"]:
+            self.measure(instruction_targets)
+            self.reset(instruction_targets)
+        if instruction_name in ["MX", "MY", "RX", "RY", "MRX", "MRY", "MPP"]:
             raise ValueError(f"Only Z basis measurements and resets are supported, not {instruction_name}.")
 
         for targets in _split_targets(instruction_name, instruction_targets):
