@@ -45,6 +45,7 @@ class Transition:
         return list(itertools.product(PAULI_STRINGS, repeat=2))[self.pauli_channel_idx]
 
 
+
 @dataclasses.dataclass
 class TransitionTable:
     transitions: dict[LeakageStatus, list[Transition]]
