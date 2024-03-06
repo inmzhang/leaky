@@ -135,7 +135,7 @@ def decompose_kraus_operators(
                 pauli_channel: list[float] | None = None
                 if num_r == 0:
                     assert projected_kraus.shape == (1, 1)
-                    probability = prefactor * np.abs(projected_kraus).astype(float) ** 2
+                    probability = (prefactor * np.abs(projected_kraus).astype(float) ** 2).item()
                 else:
                     dim = 2**num_r
                     assert projected_kraus.shape == (dim, dim)

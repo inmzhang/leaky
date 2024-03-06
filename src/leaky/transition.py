@@ -35,13 +35,14 @@ class Transition:
                 transition_types.append(TransitionType.D)
             else:
                 transition_types.append(TransitionType.L)
+        return transition_types
 
     def get_pauli_channel_name(self, is_single_qubit_channel: bool) -> tuple[str] | None:
         if self.pauli_channel_idx is None:
             return None
         if is_single_qubit_channel:
             return (PAULI_STRINGS[self.pauli_channel_idx],)
-        return itertools.product(PAULI_STRINGS, repeat=2)[self.pauli_channel_idx]
+        return list(itertools.product(PAULI_STRINGS, repeat=2))[self.pauli_channel_idx]
 
 
 @dataclasses.dataclass

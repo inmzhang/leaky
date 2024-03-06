@@ -40,4 +40,4 @@ class Sampler:
             raise ValueError("Invalid readout strategy for detector sampling.")
         measurements = self.sample(shots, readout_strategy)
         m2d_converter = self._reference_circuit.compile_m2d_converter()
-        return m2d_converter.convert(measurements=measurements.astype(np.bool_))
+        return m2d_converter.convert(measurements=measurements.astype(np.bool_), separate_observables=True)
