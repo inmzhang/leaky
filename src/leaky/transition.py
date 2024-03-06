@@ -2,6 +2,7 @@ from __future__ import annotations
 from enum import Enum, auto
 import dataclasses
 import itertools
+from typing import Callable
 
 import numpy as np
 
@@ -45,7 +46,6 @@ class Transition:
         return list(itertools.product(PAULI_STRINGS, repeat=2))[self.pauli_channel_idx]
 
 
-
 @dataclasses.dataclass
 class TransitionTable:
     transitions: dict[LeakageStatus, list[Transition]]
@@ -62,3 +62,47 @@ class TransitionTable:
         transitions = self.transitions[initial_status]
         probabilities = [t.probability for t in transitions]
         return rng.choice(transitions, p=probabilities)
+
+
+TableCondition = Callable[[LeakageStatus, int | None, int | None], bool]
+
+
+class ConditionalTable:
+    def __init__(self, table: TransitionTable, condition: TableCondition | None) -> None:
+        self.table = table
+        self.condition = condition
+
+    def check_condition(
+        self,
+        status: LeakageStatus,
+        single_qubit_table_control: int | None,
+        two_qubit_table_control: int | None,
+    ) -> bool:
+        if self.condition is None:
+            return True
+        return self.condition(status, single_qubit_table_control, two_qubit_table_control)
+
+
+class TransitionCollection:
+    def __init__(self) -> None:
+        self._tables: dict[str, list[ConditionalTable]] = dict()
+
+    def add_transition_table(
+        self, instruction_name: str, transition_table: TransitionTable, condition: TableCondition | None = None
+    ) -> None:
+        self._tables.setdefault(instruction_name, []).append(ConditionalTable(transition_table, condition))
+
+    def get_table(
+        self,
+        instruction_name: str,
+        leakage_status: LeakageStatus,
+        single_qubit_table_control: int | None,
+        two_qubit_table_control: int | None,
+    ) -> TransitionTable | None:
+        tables = self._tables.get(instruction_name)
+        if tables is None:
+            return None
+        for table in tables:
+            if table.check_condition(leakage_status, single_qubit_table_control, two_qubit_table_control):
+                return table.table
+        return None

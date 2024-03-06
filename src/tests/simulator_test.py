@@ -2,7 +2,7 @@ import numpy as np
 import stim
 import pytest
 
-from leaky.transition import Transition, TransitionTable
+from leaky.transition import Transition, TransitionTable, TransitionCollection
 from leaky.simulator import ReadoutStrategy, Simulator
 
 
@@ -41,8 +41,8 @@ def test_raise_not_supported_error(gate):
 
 
 def test_single_qubit_pauli_transition():
-    simulator = Simulator(1)
-    simulator.add_transition_table(
+    trans_collect = TransitionCollection()
+    trans_collect.add_transition_table(
         "H",
         TransitionTable(
             {
@@ -50,6 +50,7 @@ def test_single_qubit_pauli_transition():
             }
         ),
     )
+    simulator = Simulator(1, trans_collect)
     simulator.do("H", [0])
     simulator.do("H", [0], add_potential_noise=False)
     simulator.measure([0])
@@ -57,8 +58,8 @@ def test_single_qubit_pauli_transition():
 
 
 def test_single_qubit_leakage_transition():
-    simulator = Simulator(1)
-    simulator.add_transition_table(
+    trans_collect = TransitionCollection()
+    trans_collect.add_transition_table(
         "H",
         TransitionTable(
             {
@@ -68,6 +69,7 @@ def test_single_qubit_leakage_transition():
             }
         ),
     )
+    simulator = Simulator(1, trans_collect)
     simulator.do("H", [0])
     simulator.measure([0])
     assert simulator.current_measurement_record() == [2]
@@ -91,8 +93,8 @@ def test_single_qubit_leakage_transition():
 
 
 def test_two_qubit_pauli_transition():
-    simulator = Simulator(2)
-    simulator.add_transition_table(
+    trans_collect = TransitionCollection()
+    trans_collect.add_transition_table(
         "CZ",
         TransitionTable(
             {
@@ -100,14 +102,15 @@ def test_two_qubit_pauli_transition():
             }
         ),
     )
+    simulator = Simulator(2, trans_collect)
     simulator.do("CZ", [0, 1])
     simulator.measure([0, 1])
     assert simulator.current_measurement_record() == [1, 1]
 
 
 def test_two_qubit_leakage_transition():
-    simulator = Simulator(2)
-    simulator.add_transition_table(
+    trans_collect = TransitionCollection()
+    trans_collect.add_transition_table(
         "CZ",
         TransitionTable(
             {
@@ -118,6 +121,7 @@ def test_two_qubit_leakage_transition():
             }
         ),
     )
+    simulator = Simulator(2, trans_collect)
     simulator.do("CZ", [0, 1])
     simulator.measure([0, 1])
     assert simulator.current_measurement_record() == [1, 2]
@@ -144,9 +148,11 @@ def test_two_qubit_leakage_transition():
     ],
 )
 def test_single_qubit_transition_control(table, control, expected_measurement):
-    simulator = Simulator(1)
+    trans_collect = TransitionCollection()
+    trans_collect.add_transition_table("H", table, lambda _s, sq, _dq: sq == control)
+
+    simulator = Simulator(1, trans_collect)
     simulator.set_single_qubit_transition_controls({0: control})
-    simulator.add_transition_table("H", table, lambda _s, sq, _dq: sq == control)
     simulator.do("H", [0])
     simulator.do("H", [0], add_potential_noise=False)
     simulator.measure([0])
@@ -162,9 +168,10 @@ def test_single_qubit_transition_control(table, control, expected_measurement):
     ],
 )
 def test_two_qubit_transition_control(table, control, expected_measurement):
-    simulator = Simulator(2)
+    trans_collect = TransitionCollection()
+    trans_collect.add_transition_table("CZ", table, lambda _s, _sq, dq: dq == control)
+    simulator = Simulator(2, trans_collect)
     simulator.set_two_qubit_transition_controls({(0, 1): control})
-    simulator.add_transition_table("CZ", table, lambda _s, _sq, dq: dq == control)
     simulator.do("CZ", [0, 1])
     simulator.measure([0, 1])
     assert simulator.current_measurement_record() == expected_measurement

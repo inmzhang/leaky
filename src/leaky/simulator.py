@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from typing import Iterable
 from enum import Enum, auto
 
 import numpy as np
 import stim
 
-from leaky.transition import Transition, LeakageStatus, TransitionTable, TransitionType
+from leaky.transition import Transition, LeakageStatus, TransitionTable, TransitionType, TransitionCollection
 
 SINGLE_CLIFFORD_GATES = [
     "I",
@@ -58,33 +58,21 @@ class ReadoutStrategy(Enum):
     DETERMINISTIC_LEAKAGE_PROJECTION = auto()
 
 
-TableCondition = Callable[[LeakageStatus, int | None, int | None], bool]
-
-
-class ConditionalTable:
-    def __init__(self, table: TransitionTable, condition: TableCondition | None) -> None:
-        self.table = table
-        self.condition = condition
-
-    def check_condition(
-        self,
-        status: LeakageStatus,
-        single_qubit_table_control: int | None,
-        two_qubit_table_control: int | None,
-    ) -> bool:
-        if self.condition is None:
-            return True
-        return self.condition(status, single_qubit_table_control, two_qubit_table_control)
-
-
 class Simulator:
-    def __init__(self, num_qubits: int, seed: int | None = None) -> None:
+    def __init__(
+        self, 
+        num_qubits: int,
+        transition_collection: TransitionCollection | None = None,
+        single_qubit_transition_controls: dict[int, int] | None = None,
+        two_qubit_transition_controls: dict[tuple[int, int], int] | None = None,
+        seed: int | None = None
+    ) -> None:
         self._num_qubits = num_qubits
         # classical control registers for selecting transition tables
-        self._single_qubit_transition_controls: dict[int, int] = dict()
-        self._two_qubit_transition_controls: dict[tuple[int, int], int] = dict()
+        self._single_qubit_transition_controls = single_qubit_transition_controls or dict()
+        self._two_qubit_transition_controls = two_qubit_transition_controls or dict()
 
-        self._tables: dict[str, list[ConditionalTable]] = dict()
+        self._transition_collection = transition_collection or TransitionCollection()
         self._status_vec = StatusVec(num_qubits)
         self._rng = np.random.default_rng(seed)
         self._tableau_simulator = stim.TableauSimulator(seed=seed)
@@ -100,8 +88,8 @@ class Simulator:
         return self._tableau_simulator
 
     @property
-    def transition_tables(self) -> dict[str, list[ConditionalTable]]:
-        return self._tables
+    def transition_collection(self) -> TransitionCollection:
+        return self._transition_collection
 
     @property
     def single_qubit_transition_controls(self) -> dict[int, int]:
@@ -110,11 +98,6 @@ class Simulator:
     @property
     def two_qubit_transition_controls(self) -> dict[tuple[int, int], int]:
         return self._two_qubit_transition_controls
-
-    def add_transition_table(
-        self, instruction_name: str, transition_table: TransitionTable, condition: TableCondition | None = None
-    ) -> None:
-        self._tables.setdefault(instruction_name, []).append(ConditionalTable(transition_table, condition))
 
     def set_single_qubit_transition_controls(self, controls: dict[int, int]) -> None:
         self._single_qubit_transition_controls.update(controls)
@@ -213,23 +196,16 @@ class Simulator:
         return self._status_vec.get_status(targets)
 
     def _get_satifying_table(self, instruction_name: str, targets: list[int]) -> TransitionTable | None:
-        tables = self._tables.get(instruction_name)
-        if tables is None:
-            return None
-        for table in tables:
-            if len(targets) == 1:
-                single_qubit_table_control = self._single_qubit_transition_controls.get(targets[0])
-                two_qubit_table_controls = None
-            else:
-                single_qubit_table_control = None
-                two_qubit_table_controls = self._two_qubit_transition_controls.get(tuple(targets))
-            if table.check_condition(
-                self._status_vec.get_status(targets),
-                single_qubit_table_control,
-                two_qubit_table_controls,
-            ):
-                return table.table
-        return None
+        leakage_status = self._status_vec.get_status(targets)
+        if len(targets) == 1:
+            single_qubit_table_control = self._single_qubit_transition_controls.get(targets[0])
+            two_qubit_table_controls = None
+        else:
+            single_qubit_table_control = None
+            two_qubit_table_controls = self._two_qubit_transition_controls.get(tuple(targets))
+        return self._transition_collection.get_table(
+            instruction_name, leakage_status, single_qubit_table_control, two_qubit_table_controls
+        )
 
     def _apply_transition(self, targets: list[int], transition: Transition) -> None:
         self._status_vec.apply_transition(targets, transition)

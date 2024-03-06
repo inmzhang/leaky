@@ -3,19 +3,23 @@ from __future__ import annotations
 import stim
 import numpy as np
 
-from leaky.transition import TransitionTable
 from leaky.simulator import ReadoutStrategy, Simulator
+from leaky.transition import TransitionCollection
 
 
 class Sampler:
     def __init__(
         self,
         reference_circuit: stim.Circuit,
-        tables: dict[str, TransitionTable] | None = None,
+        transition_collection: TransitionCollection | None = None,
+        single_qubit_transition_controls: dict[int, int] | None = None,
+        two_qubit_transition_controls: dict[tuple[int, int], int] | None = None,
         seed: int | None = None,
     ) -> None:
         self._reference_circuit = reference_circuit
-        self._tables = tables
+        self._transition_collection = transition_collection
+        self._single_qubit_transition_controls = single_qubit_transition_controls
+        self._two_qubit_transition_controls = two_qubit_transition_controls
         self._seed = seed
 
     def sample(
@@ -25,7 +29,13 @@ class Sampler:
         results = []
         for i in range(shots):
             seed = self._seed * (i + 1) if self._seed is not None else None
-            simulator = Simulator(num_qubits, self._tables, seed)
+            simulator = Simulator(
+                num_qubits,
+                self._transition_collection,
+                self._single_qubit_transition_controls,
+                self._two_qubit_transition_controls,
+                seed,
+            )
             simulator.do_circuit(self._reference_circuit)
             results.append(simulator.current_measurement_record(readout_strategy))
         return np.asarray(results, dtype=np.uint8)

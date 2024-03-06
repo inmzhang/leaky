@@ -4,6 +4,8 @@ from leaky.decompose import decompose_kraus_operators
 
 from leaky.simulator import StatusVec, ReadoutStrategy, Simulator
 
+from leaky.sampler import Sampler
+
 
 __all__ = [
     "TransitionType",
@@ -13,4 +15,5 @@ __all__ = [
     "StatusVec",
     "ReadoutStrategy",
     "Simulator",
+    "Sampler",
 ]
