@@ -29,18 +29,18 @@ pytest --cov=src/leaky src/tests
 ```python
 import leaky
 
-trans_collect = TransitionCollection()
+trans_collect = leaky.TransitionCollection()
 trans_collect.add_transition_table(
     "H",
-    TransitionTable(
+    leaky.TransitionTable(
         {
-            (0,): [Transition((0,), (1,), 1.0)],
-            (1,): [Transition((1,), (2,), 1.0)],
-            (2,): [Transition((2,), (0,), 1.0)],
+            (0,): [leaky.Transition((0,), (1,), 1.0)],
+            (1,): [leaky.Transition((1,), (2,), 1.0)],
+            (2,): [leaky.Transition((2,), (0,), 1.0)],
         }
     ),
 )
-simulator = Simulator(1, trans_collect)
+simulator = leaky.Simulator(1, trans_collect)
 simulator.do("H", [0])
 simulator.measure([0])
 assert simulator.current_measurement_record() == [2]
