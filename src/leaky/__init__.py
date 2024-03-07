@@ -1,4 +1,4 @@
-from leaky.transition import TransitionType, Transition, TransitionTable
+from leaky.transition import TransitionType, Transition, TransitionTable, TransitionCollection
 
 from leaky.decompose import decompose_kraus_operators
 
@@ -11,6 +11,7 @@ __all__ = [
     "TransitionType",
     "Transition",
     "TransitionTable",
+    "TransitionCollection",
     "decompose_kraus_operators",
     "StatusVec",
     "ReadoutStrategy",
