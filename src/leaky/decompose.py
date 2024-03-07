@@ -31,6 +31,7 @@ def get_projector_slice(
     num_level: int,
     project_status: ProjectStatus,
 ) -> list[int]:
+    """Get slice into the matrix for the subspace projection defined by project_status."""
     num_qubits = len(project_status)
     status = project_status[0]
     if num_qubits == 1:
@@ -118,6 +119,13 @@ def _add_transition(
 def decompose_kraus_operators(
     kraus_operators: Sequence[np.ndarray], num_qubits: int, num_level: int
 ) -> TransitionTable:
+    """Decompose the Kraus operators into a transition table.
+
+    Args:
+        kraus_operators: A sequence of Kraus operators corresponding to an operation's error channel.
+        num_qubits: The number of qubits in the operation.
+        num_level: The number of levels of the quantum system to be considered.
+    """
     all_status = list(itertools.product(range(num_level - 1), repeat=num_qubits))
     record: dict[LeakageStatus, dict[tuple[LeakageStatus, int | None], float]] = dict()
     for kraus in kraus_operators:

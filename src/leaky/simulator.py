@@ -33,32 +33,61 @@ STIM_ANNOTATIONS = ["DETECTOR", "MPAD", "OBSERVABLE_INCLUDE", "QUBIT_COORDS", "S
 
 
 class StatusVec:
+    """Vector of leakage status for the qubits."""
+
     def __init__(self, num_qubits) -> None:
         self.status_vec = np.zeros(num_qubits, dtype=int)
 
     def get_status(self, qubits: list[int]) -> LeakageStatus:
+        """Get the leakage status of the qubits.
+
+        Args:
+            qubits: The qubits to get the status.
+
+        Returns:
+            The leakage status of the qubits.
+        """
         return tuple(self.status_vec[qubits])
 
     def set_status(self, qubits: list[int], status: int) -> None:
+        """Set the leakage status of the qubits.
+
+        Args:
+            qubits: The qubits to set the status.
+            status: The leakage status to set.
+        """
         self.status_vec[qubits] = status
 
     def apply_transition(self, on_qubits: list[int], transition: Transition) -> None:
+        """Apply the transition to the status vector.
+
+        Args:
+            on_qubits: The qubits to apply the transition.
+            transition: The transition to apply.
+        """
         self.status_vec[on_qubits] = transition.final_status
 
     def clear(self) -> None:
+        """Clear the status vector."""
         self.status_vec = np.zeros_like(self.status_vec, dtype=int)
 
 
 class ReadoutStrategy(Enum):
-    # read the raw labels
+    """The readout strategy for the measurement record.
+
+    RAW_LABEL: The raw measurement record, including the leakage state.
+    RANDOM_LEAKAGE_PROJECTION: Randomly project the leakage to the ground state(50% chance for 0/1).
+    DETERMINISTIC_LEAKAGE_PROJECTION: Deterministicly project the leakage state to state 1.
+    """
+
     RAW_LABEL = auto()
-    # randomly project the leakage to the ground state(50% chance for 0/1)
     RANDOM_LEAKAGE_PROJECTION = auto()
-    # deterministicly project the leakage state to state 1
     DETERMINISTIC_LEAKAGE_PROJECTION = auto()
 
 
 class Simulator:
+    """Core simulator for the leaky noise model."""
+
     def __init__(
         self,
         num_qubits: int,
@@ -67,6 +96,15 @@ class Simulator:
         two_qubit_transition_controls: dict[tuple[int, int], int] | None = None,
         seed: int | None = None,
     ) -> None:
+        """Initialize the simulator.
+
+        Args:
+            num_qubits: The number of qubits in the simulator.
+            transition_collection: The transition collection to use for the simulator.
+            single_qubit_transition_controls: The classical control register for selecting single qubit transition tables.
+            two_qubit_transition_controls: The classical control register for selecting two qubit transition tables.
+            seed: The random seed for the simulator.
+        """
         self._num_qubits = num_qubits
         # classical control registers for selecting transition tables
         self._single_qubit_transition_controls = single_qubit_transition_controls or dict()
@@ -81,28 +119,35 @@ class Simulator:
 
     @property
     def num_qubits(self) -> int:
+        """Return the number of qubits in the simulator."""
         return self._num_qubits
 
     @property
     def internal_tableau_simulator(self) -> stim.TableauSimulator:
+        """Return the internal stim.TableauSimulator instance."""
         return self._tableau_simulator
 
     @property
     def transition_collection(self) -> TransitionCollection:
+        """Return the transition collection."""
         return self._transition_collection
 
     @property
     def single_qubit_transition_controls(self) -> dict[int, int]:
+        """Return the current single qubit transition controls."""
         return self._single_qubit_transition_controls
 
     @property
     def two_qubit_transition_controls(self) -> dict[tuple[int, int], int]:
+        """Return the current two qubit transition controls."""
         return self._two_qubit_transition_controls
 
     def set_single_qubit_transition_controls(self, controls: dict[int, int]) -> None:
+        """Set the single qubit transition controls."""
         self._single_qubit_transition_controls.update(controls)
 
     def set_two_qubit_transition_controls(self, controls: dict[tuple[int, int], int]) -> None:
+        """Set the two qubit transition controls."""
         self._two_qubit_transition_controls.update(controls)
 
     def do(
@@ -112,11 +157,28 @@ class Simulator:
         args: float | Iterable[float] = (),
         add_potential_noise: bool = True,
     ) -> None:
-        """Do instruction."""
+        """Do a single circuit instruction.
+
+        Args:
+            name: The name of the instruction.
+            targets: The qubits to apply the instruction.
+            args: The arguments for the instruction.
+            add_potential_noise: Whether to add potential noise to the instruction. When True,
+                the simulator will sample a transition from the transition table(if exists) and
+                apply it to the qubits. Default is True.
+        """
         instruction = stim.CircuitInstruction(name, list(targets), list(args))
         self.do_instruction(instruction, add_potential_noise)
 
     def do_circuit(self, circuit: stim.Circuit, qubits_map: dict[int, int] | None = None) -> None:
+        """Do a circuit.
+
+        Args:
+            circuit: The circuit to apply.
+            qubits_map: The mapping from the circuit qubits to the simulator qubits. The simulator
+                qubits are indexed from 0 to num_qubits-1. If None, the qubits in the circuit are
+                automatically mapped to the simulator qubits.
+        """
         if circuit.num_qubits != self._num_qubits:
             raise ValueError(f"Expected {self._num_qubits} qubits, but got {circuit.num_qubits} in the circuit.")
 
@@ -143,6 +205,14 @@ class Simulator:
         instruction: stim.CircuitInstruction,
         add_potential_noise: bool = True,
     ) -> None:
+        """Do a single circuit instruction.
+
+        Args:
+            instruction: The instruction to apply.
+            add_potential_noise: Whether to add potential noise to the instruction. When True,
+                the simulator will sample a transition from the transition table(if exists) and
+                apply it to the qubits. Default is True.
+        """
         instruction_name = instruction.name
         instruction_targets = [t.qubit_value for t in instruction.targets_copy()]
         if instruction_name in ["M", "MZ"]:
@@ -170,17 +240,32 @@ class Simulator:
             self._apply_transition(targets, sampled_transition)
 
     def measure(self, targets: list[int]) -> None:
-        """Z basis measurement."""
+        """Z basis measurement.
+
+        Args:
+            targets: The qubits to measure.
+        """
         self._measurement_status.extend(self._status_vec.get_status(targets))
         self._tableau_simulator.measure_many(*targets)
 
     def reset(self, targets: list[int]) -> None:
-        """Z basis reset."""
+        """Z basis reset.
+
+        Args:
+            targets: The qubits to reset.
+        """
         self._status_vec.set_status(targets, 0)
         self._tableau_simulator.reset(*targets)
 
     def current_measurement_record(self, readout_strategy: ReadoutStrategy = ReadoutStrategy.RAW_LABEL) -> list[int]:
-        """Get the measurement record."""
+        """Get the measurement record.
+
+        Args:
+            readout_strategy: The readout strategy for the measurement record. Default is ReadoutStrategy.RAW_LABEL.
+
+        Returns:
+            The measurement record as a list of integers.
+        """
         if readout_strategy == ReadoutStrategy.RAW_LABEL:
             return [
                 int(m) if status == 0 else status + 1
@@ -198,6 +283,14 @@ class Simulator:
             ]
 
     def current_status(self, targets: list[int]) -> LeakageStatus:
+        """Get the current leakage status of the qubits.
+
+        Args:
+            targets: The qubits to get the status.
+
+        Returns:
+            The leakage status of the qubits.
+        """
         return self._status_vec.get_status(targets)
 
     def _get_satifying_table(self, instruction_name: str, targets: list[int]) -> TransitionTable | None:
