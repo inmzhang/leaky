@@ -60,12 +60,12 @@ class ReadoutStrategy(Enum):
 
 class Simulator:
     def __init__(
-        self, 
+        self,
         num_qubits: int,
         transition_collection: TransitionCollection | None = None,
         single_qubit_transition_controls: dict[int, int] | None = None,
         two_qubit_transition_controls: dict[tuple[int, int], int] | None = None,
-        seed: int | None = None
+        seed: int | None = None,
     ) -> None:
         self._num_qubits = num_qubits
         # classical control registers for selecting transition tables
@@ -161,7 +161,9 @@ class Simulator:
             table = self._get_satifying_table(instruction_name, targets)
             current_status = self._status_vec.get_status(targets)
             if all(s == 0 for s in current_status):
-                self._tableau_simulator.do(stim.CircuitInstruction(instruction_name, targets))
+                self._tableau_simulator.do(
+                    stim.CircuitInstruction(instruction_name, targets, instruction.gate_args_copy())
+                )
             if table is None or not add_potential_noise:
                 continue
             sampled_transition = table.sample(current_status, self._rng)
