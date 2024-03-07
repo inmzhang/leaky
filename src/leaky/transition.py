@@ -60,7 +60,8 @@ class TransitionTable:
 
     def sample(self, initial_status: LeakageStatus, rng: np.random.Generator) -> Transition:
         transitions = self.transitions[initial_status]
-        probabilities = [t.probability for t in transitions]
+        probabilities = np.array([t.probability for t in transitions])
+        probabilities /= np.sum(probabilities)
         return rng.choice(transitions, p=probabilities)
 
 
