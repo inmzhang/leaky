@@ -13,14 +13,10 @@ class Sampler:
         self,
         reference_circuit: stim.Circuit,
         transition_collection: TransitionCollection | None = None,
-        single_qubit_transition_controls: dict[int, int] | None = None,
-        two_qubit_transition_controls: dict[tuple[int, int], int] | None = None,
         seed: int | None = None,
     ) -> None:
         self._reference_circuit = reference_circuit
         self._transition_collection = transition_collection
-        self._single_qubit_transition_controls = single_qubit_transition_controls
-        self._two_qubit_transition_controls = two_qubit_transition_controls
         self._seed = seed
 
     def sample(
@@ -35,8 +31,6 @@ class Sampler:
                 i,
                 num_qubits,
                 self._transition_collection,
-                self._single_qubit_transition_controls,
-                self._two_qubit_transition_controls,
                 self._seed,
                 self._reference_circuit,
                 readout_strategy,
@@ -68,8 +62,6 @@ def _sample_single_shot(args):
         i,
         num_qubits,
         transition_collection,
-        single_qubit_transition_controls,
-        two_qubit_transition_controls,
         seed,
         reference_circuit,
         readout_strategy,
@@ -78,8 +70,6 @@ def _sample_single_shot(args):
     simulator = Simulator(
         num_qubits,
         transition_collection,
-        single_qubit_transition_controls,
-        two_qubit_transition_controls,
         seed,
     )
     simulator.do_circuit(reference_circuit)
