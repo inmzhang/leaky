@@ -9,6 +9,12 @@ import numpy as np
 PAULI_STRINGS = ["I", "X", "Y", "Z"]
 
 LeakageStatus = tuple[int, ...]
+"""The leakage status of the qubits in the circuit.
+
+Important:
+    In `leaky`, the computational subspace is represented by 0, and the leakage subspace is represented by positive
+    integers. |2> is represented by 1, |3> is represented by 2, and so on.
+"""
 
 
 class TransitionType(Enum):
