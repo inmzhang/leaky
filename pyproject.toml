@@ -1,20 +1,7 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [
+    "setuptools",
+    "cmake>=3.13",
+    "ninja>=1.10"
+]
 build-backend = "setuptools.build_meta"
-
-[tool.ruff]
-line-length = 120
-exclude = ["__init__.py"]
-
-[project]
-name = "leaky"
-version = "0.2.0"
-authors = [{ "name" = "Yiming Zhang" }]
-requires-python = ">=3.9"
-description = "An implementation of Google's Pauli+ simulator."
-readme = "README.md"
-
-dependencies = ["stim"]
-
-[project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff"]
