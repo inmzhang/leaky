@@ -15,3 +15,7 @@ __pycache__
 examples
 
 dist
+
+build
+
+.cache
