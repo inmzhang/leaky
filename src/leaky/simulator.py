@@ -217,10 +217,12 @@ class Simulator:
         instruction_targets = [t.qubit_value for t in instruction.targets_copy()]
         instruction_args = instruction.gate_args_copy()
         if instruction_name in ["M", "MZ"]:
-            self.measure(instruction_targets, instruction_args)
+            assert len(instruction_args) <= 1
+            self.measure(instruction_targets, instruction_args[0] if instruction_args else None)
             return
         if instruction_name in ["R", "RZ"]:
-            self.reset(instruction_targets, instruction_args)
+            assert len(instruction_args) <= 1
+            self.reset(instruction_targets, instruction_args[0] if instruction_args else None)
             return
         if instruction_name in ["MR", "MRZ"]:
             self.measure(instruction_targets)
@@ -242,23 +244,25 @@ class Simulator:
             sampled_transition = table.sample(current_status, self._rng)
             self._apply_transition(targets, sampled_transition)
 
-    def measure(self, targets: list[int], args: list[float]) -> None:
+    def measure(self, targets: list[int], flip_probability: float | None = None) -> None:
         """Z basis measurement.
 
         Args:
             targets: The qubits to measure.
         """
         self._measurement_status.extend(self._status_vec.get_status(targets))
-        self._tableau_simulator.do(stim.CircuitInstruction("M", targets, args))
+        measurement_args = [flip_probability] if flip_probability is not None else []
+        self._tableau_simulator.do(stim.CircuitInstruction("M", targets, measurement_args))
 
-    def reset(self, targets: list[int], args: list[float]) -> None:
+    def reset(self, targets: list[int], flip_probability: float | None = None) -> None:
         """Z basis reset.
 
         Args:
             targets: The qubits to reset.
         """
         self._status_vec.set_status(targets, 0)
-        self._tableau_simulator.do(stim.CircuitInstruction("R", targets, args))
+        reset_args = [flip_probability] if flip_probability is not None else []
+        self._tableau_simulator.do(stim.CircuitInstruction("R", targets, reset_args))
 
     def current_measurement_record(self, readout_strategy: ReadoutStrategy = ReadoutStrategy.RAW_LABEL) -> list[int]:
         """Get the measurement record.
