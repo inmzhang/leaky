@@ -215,11 +215,12 @@ class Simulator:
         """
         instruction_name = instruction.name
         instruction_targets = [t.qubit_value for t in instruction.targets_copy()]
+        instruction_args = instruction.gate_args_copy()
         if instruction_name in ["M", "MZ"]:
-            self.measure(instruction_targets)
+            self.measure(instruction_targets, instruction_args)
             return
         if instruction_name in ["R", "RZ"]:
-            self.reset(instruction_targets)
+            self.reset(instruction_targets, instruction_args)
             return
         if instruction_name in ["MR", "MRZ"]:
             self.measure(instruction_targets)
@@ -227,35 +228,37 @@ class Simulator:
         if instruction_name in ["MX", "MY", "RX", "RY", "MRX", "MRY", "MPP"]:
             raise ValueError(f"Only Z basis measurements and resets are supported, not {instruction_name}.")
 
+        if not self.transition_collection.has_table_for(instruction_name):
+            self._tableau_simulator.do(instruction)
+            return
+
         for targets in _split_targets(instruction_name, instruction_targets):
             table = self._get_satifying_table(instruction_name, targets)
             current_status = self._status_vec.get_status(targets)
             if all(s == 0 for s in current_status):
-                self._tableau_simulator.do(
-                    stim.CircuitInstruction(instruction_name, targets, instruction.gate_args_copy())
-                )
+                self._tableau_simulator.do(stim.CircuitInstruction(instruction_name, targets, instruction_args))
             if table is None or not add_potential_noise:
                 continue
             sampled_transition = table.sample(current_status, self._rng)
             self._apply_transition(targets, sampled_transition)
 
-    def measure(self, targets: list[int]) -> None:
+    def measure(self, targets: list[int], args: list[float]) -> None:
         """Z basis measurement.
 
         Args:
             targets: The qubits to measure.
         """
         self._measurement_status.extend(self._status_vec.get_status(targets))
-        self._tableau_simulator.measure_many(*targets)
+        self._tableau_simulator.do(stim.CircuitInstruction("M", targets, args))
 
-    def reset(self, targets: list[int]) -> None:
+    def reset(self, targets: list[int], args: list[float]) -> None:
         """Z basis reset.
 
         Args:
             targets: The qubits to reset.
         """
         self._status_vec.set_status(targets, 0)
-        self._tableau_simulator.reset(*targets)
+        self._tableau_simulator.do(stim.CircuitInstruction("R", targets, args))
 
     def current_measurement_record(self, readout_strategy: ReadoutStrategy = ReadoutStrategy.RAW_LABEL) -> list[int]:
         """Get the measurement record.

@@ -180,6 +180,17 @@ class TransitionCollection:
         """
         self._tables.setdefault(instruction_name, []).append(ConditionalTable(transition_table, condition))
 
+    def has_table_for(self, instruction_name: str) -> bool:
+        """Check if the collection has a table for an instruction.
+
+        Args:
+            instruction_name: The name of the instruction.
+
+        Returns:
+            True if the collection has a table for the instruction, False otherwise.
+        """
+        return instruction_name in self._tables
+
     def get_table(
         self,
         instruction_name: str,
