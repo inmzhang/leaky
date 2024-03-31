@@ -40,11 +40,11 @@ else ()
 endif ()
 
 set(SOURCE_FILES_NO_MAIN
-        src/leaky/simulator.cc
+        src/leaky/core/simulator.cc
         )
 
 set(TEST_FILES
-        src/leaky/simulator_test.cc
+        src/leaky/core/simulator_test.cc
         )
 
 set(PYTHON_API_FILES

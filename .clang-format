@@ -1,4 +1,3 @@
----
 Language: Cpp
 BasedOnStyle: Google
 IndentWidth: 4
@@ -19,4 +18,3 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^".*"$'
     Priority:        3
-...
