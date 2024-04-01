@@ -8,44 +8,9 @@
 #include "leaky/core/channel.h"
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/readout_strategy.h"
-#include "stim/circuit/circuit_instruction.h"
-#include "stim/circuit/gate_data.h"
-#include "stim/simulators/tableau_simulator.h"
+#include "stim.h"
 
 using stim::GateType;
-
-static std::array<std::string, 4> PAULI_1Q = {
-    "I",
-    "X",
-    "Y",
-    "Z",
-};
-
-static std::array<std::string, 16> PAULI_2Q = {
-    "II",
-    "IX",
-    "IY",
-    "IZ",
-    "XI",
-    "XX",
-    "XY",
-    "XZ",
-    "YI",
-    "YX",
-    "YY",
-    "YZ",
-    "ZI",
-    "ZX",
-    "ZY",
-    "ZZ",
-};
-
-std::string pauli_idx_to_string(uint8_t idx, bool is_single_qubit_channel) {
-    if (is_single_qubit_channel) {
-        return PAULI_1Q[idx];
-    }
-    return PAULI_2Q[idx];
-}
 
 leaky::Simulator::Simulator(uint32_t num_qubits, std::map<inst_id, const LeakyPauliChannel&> binded_leaky_channels)
     : num_qubits(num_qubits),
@@ -89,7 +54,7 @@ void leaky::Simulator::do_1q_leaky_pauli_channel(
         auto [next_status, pauli_channel_idx] = channel.sample(cur_status);
         leakage_status[qubit] = next_status;
         handle_u_or_d(cur_status, next_status, q);
-        auto pauli_str = pauli_idx_to_string(pauli_channel_idx, true);
+        auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, true);
         tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_str).id, {}, {std::vector<stim::GateTarget>{q}}});
     }
 }
@@ -116,7 +81,7 @@ void leaky::Simulator::do_2q_leaky_pauli_channel(
         handle_u_or_d(cs1, ns1, t1);
         handle_u_or_d(cs2, ns2, t2);
 
-        auto pauli_str = pauli_idx_to_string(pauli_channel_idx, false);
+        auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, false);
         tableau_simulator.do_gate(
             {stim::GATE_DATA.at(pauli_str.substr(0, 1)).id, {}, {std::vector<stim::GateTarget>{t1}}});
         tableau_simulator.do_gate(
