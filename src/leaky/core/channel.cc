@@ -1,5 +1,5 @@
 
-#include "leaky/core/transition.h"
+#include "leaky/core/channel.h"
 
 #include <algorithm>
 #include <cassert>
@@ -7,11 +7,31 @@
 
 #include "leaky/core/rand_gen.h"
 
+leaky::TransitionType get_transition_type(uint8_t initial_status, uint8_t final_status) {
+    if (initial_status == 0 && final_status == 0) {
+        return leaky::TransitionType::R;
+    } else if (initial_status == 0 && final_status > 0) {
+        return leaky::TransitionType::U;
+    } else if (initial_status > 0 && final_status == 0) {
+        return leaky::TransitionType::D;
+    } else {
+        return leaky::TransitionType::L;
+    }
+}
+
 leaky::LeakyPauliChannel::LeakyPauliChannel(bool is_single_qubit_transition)
     : initial_status_vec(0),
       transitions(0),
       cumulative_probs(0),
       is_single_qubit_transition(is_single_qubit_transition) {
+}
+
+uint32_t leaky::LeakyPauliChannel::num_transitions() const {
+    uint32_t num_transitions = 0;
+    for (const auto &transitions_vec : transitions) {
+        num_transitions += transitions_vec.size();
+    }
+    return num_transitions;
 }
 
 void leaky::LeakyPauliChannel::add_transition(

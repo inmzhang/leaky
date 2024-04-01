@@ -5,9 +5,9 @@
 #include <random>
 #include <vector>
 
+#include "leaky/core/channel.h"
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/readout_strategy.h"
-#include "leaky/core/transition.h"
 #include "stim/circuit/circuit_instruction.h"
 #include "stim/circuit/gate_data.h"
 #include "stim/simulators/tableau_simulator.h"
@@ -40,18 +40,6 @@ static std::array<std::string, 16> PAULI_2Q = {
     "ZZ",
 };
 
-leaky::TransitionType get_transition_type(uint8_t initial_status, uint8_t final_status) {
-    if (initial_status == 0 && final_status == 0) {
-        return leaky::TransitionType::R;
-    } else if (initial_status == 0 && final_status > 0) {
-        return leaky::TransitionType::U;
-    } else if (initial_status > 0 && final_status == 0) {
-        return leaky::TransitionType::D;
-    } else {
-        return leaky::TransitionType::L;
-    }
-}
-
 std::string pauli_idx_to_string(uint8_t idx, bool is_single_qubit_channel) {
     if (is_single_qubit_channel) {
         return PAULI_1Q[idx];
@@ -68,7 +56,7 @@ leaky::Simulator::Simulator(uint32_t num_qubits, std::map<inst_id, const LeakyPa
 }
 
 void leaky::Simulator::handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::GateTarget target) {
-    auto transition_type = get_transition_type(cur_status, next_status);
+    auto transition_type = leaky::get_transition_type(cur_status, next_status);
     std::vector<stim::GateTarget> one_q_target = {target};
     std::vector<double> args = {0.5};
     const stim::CircuitInstruction x_error = {GateType::X_ERROR, args, one_q_target};

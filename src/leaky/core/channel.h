@@ -15,6 +15,8 @@ enum TransitionType : uint8_t {
     L,
 };
 
+TransitionType get_transition_type(uint8_t initial_status, uint8_t final_status);
+
 typedef std::pair<uint8_t, uint8_t> transition;
 
 struct LeakyPauliChannel {
@@ -24,6 +26,7 @@ struct LeakyPauliChannel {
     bool is_single_qubit_transition;
 
     LeakyPauliChannel(bool is_single_qubit_transition = true);
+    uint32_t num_transitions() const;
     void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
     transition sample(uint8_t initial_status) const;
 };

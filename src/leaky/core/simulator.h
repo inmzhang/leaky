@@ -6,8 +6,8 @@
 #include <tuple>
 #include <vector>
 
+#include "leaky/core/channel.h"
 #include "leaky/core/readout_strategy.h"
-#include "leaky/core/transition.h"
 #include "stim.h"
 
 namespace leaky {

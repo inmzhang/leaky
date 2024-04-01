@@ -40,10 +40,13 @@ else ()
 endif ()
 
 set(SOURCE_FILES_NO_MAIN
+        src/leaky/core/rand_gen.cc
+        src/leaky/core/channel.cc
         src/leaky/core/simulator.cc
         )
 
 set(TEST_FILES
+        src/leaky/core/channel_test.cc
         src/leaky/core/simulator_test.cc
         )
 
