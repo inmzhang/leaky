@@ -51,6 +51,7 @@ set(TEST_FILES
         )
 
 set(PYTHON_API_FILES
+        src/leaky/core/rand_gen.pybind.cc
         src/leaky/leaky.pybind.cc
         )
 
@@ -91,6 +92,7 @@ gtest_discover_tests(leaky_tests)
 IF(EXISTS ${CMAKE_CURRENT_LIST_DIR}/pybind11/CMakeLists.txt)
     add_subdirectory(pybind11)
     pybind11_add_module(_cpp_leaky ${PYTHON_API_FILES} ${SOURCE_FILES_NO_MAIN})
+    include_directories(${PYTHON_INCLUDE_DIRS})
     target_link_libraries(_cpp_leaky PRIVATE libstim)
     target_compile_options(_cpp_leaky PRIVATE ${ARCH_OPT})
 else()
