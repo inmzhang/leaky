@@ -1,5 +1,5 @@
-#ifndef LEAKY_TRANSITION_H
-#define LEAKY_TRANSITION_H
+#ifndef LEAKY_CHANNEL_H
+#define LEAKY_CHANNEL_H
 
 #include <cstdint>
 #include <sys/types.h>
@@ -32,4 +32,4 @@ struct LeakyPauliChannel {
 };
 }  // namespace leaky
 
-#endif  // LEAKY_TRANSITION_H
+#endif  // LEAKY_CHANNEL_H

@@ -7,7 +7,7 @@
 
 #include "leaky/core/rand_gen.h"
 
-leaky::TransitionType get_transition_type(uint8_t initial_status, uint8_t final_status) {
+leaky::TransitionType leaky::get_transition_type(uint8_t initial_status, uint8_t final_status) {
     if (initial_status == 0 && final_status == 0) {
         return leaky::TransitionType::R;
     } else if (initial_status == 0 && final_status > 0) {
