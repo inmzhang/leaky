@@ -2,6 +2,7 @@
 #include "leaky/core/channel.h"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdlib>
 #include <ostream>
@@ -118,7 +119,7 @@ void leaky::LeakyPauliChannel::safety_check() const {
         auto initial_status = initial_status_vec[i];
         auto &transitions_from_initial = transitions[i];
         auto &probs = cumulative_probs[i];
-        if (abs(probs.back() - 1.0) > 1e-6) {
+        if (std::fabs(probs.back() - 1.0) > 1e-6) {
             throw std::runtime_error("The sum of probabilities for each initial status should be 1");
         }
         for (size_t j = 0; j < transitions_from_initial.size(); j++) {

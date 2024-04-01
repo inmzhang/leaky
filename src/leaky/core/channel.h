@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <sys/types.h>
 #include <utility>
 #include <vector>
