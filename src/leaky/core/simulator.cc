@@ -59,10 +59,11 @@ std::string pauli_idx_to_string(uint8_t idx, bool is_single_qubit_channel) {
     return PAULI_2Q[idx];
 }
 
-leaky::Simulator::Simulator(uint32_t num_qubits)
+leaky::Simulator::Simulator(uint32_t num_qubits, std::map<inst_id, const LeakyPauliChannel&> binded_leaky_channels)
     : num_qubits(num_qubits),
       leakage_status(num_qubits, 0),
       leakage_masks_record(0),
+      binded_leaky_channels(binded_leaky_channels),
       tableau_simulator(std::mt19937_64(leaky::global_urng()), num_qubits) {
 }
 
@@ -80,6 +81,12 @@ void leaky::Simulator::handle_u_or_d(uint8_t cur_status, uint8_t next_status, st
         tableau_simulator.do_RZ(reset);
         tableau_simulator.do_X_ERROR(x_error);
     }
+}
+
+void leaky::Simulator::bind_leaky_channel(
+    const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel) {
+    inst_id inst_key = {ideal_inst.gate_type, ideal_inst.args, ideal_inst.targets};
+    binded_leaky_channels.insert({inst_key, channel});
 }
 
 void leaky::Simulator::do_1q_leaky_pauli_channel(
@@ -173,11 +180,44 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
     }
 }
 
-void leaky::Simulator::clear() {
+void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
+    for (const auto& op : circuit.operations) {
+        if (op.gate_type == GateType::REPEAT) {
+            uint64_t repeats = op.repeat_block_rep_count();
+            const auto& block = op.repeat_block_body(circuit);
+            for (uint64_t k = 0; k < repeats; k++) {
+                do_circuit(block);
+            }
+        } else {
+            auto inst_key = inst_id{op.gate_type, op.args, op.targets};
+            auto it = binded_leaky_channels.find(inst_key);
+            if (it != binded_leaky_channels.end()) {
+                auto channel = it->second;
+                auto flags = stim::GATE_DATA[op.gate_type].flags;
+                if (flags & stim::GATE_IS_UNITARY) {
+                    if (flags & stim::GATE_IS_SINGLE_QUBIT_GATE) {
+                        do_1q_leaky_pauli_channel(op, channel);
+                    } else {
+                        do_2q_leaky_pauli_channel(op, channel);
+                    }
+                } else {
+                    do_gate(op);
+                }
+            } else {
+                do_gate(op);
+            }
+        }
+    }
+}
+
+void leaky::Simulator::clear(bool clear_binded_channels) {
     leakage_status = std::vector<uint8_t>(num_qubits, 0);
     leakage_masks_record.clear();
     tableau_simulator =
         stim::TableauSimulator<stim::MAX_BITWORD_WIDTH>{std::mt19937_64(leaky::global_urng()), leakage_status.size()};
+    if (clear_binded_channels) {
+        binded_leaky_channels.clear();
+    }
 }
 
 std::vector<uint8_t> leaky::Simulator::current_measurement_record(ReadoutStrategy readout_strategy) {
