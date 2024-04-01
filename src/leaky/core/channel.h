@@ -2,6 +2,7 @@
 #define LEAKY_CHANNEL_H
 
 #include <cstdint>
+#include <optional>
 #include <sys/types.h>
 #include <utility>
 #include <vector>
@@ -17,6 +18,8 @@ enum TransitionType : uint8_t {
 
 TransitionType get_transition_type(uint8_t initial_status, uint8_t final_status);
 
+std::string pauli_idx_to_string(uint8_t idx, bool is_single_qubit_channel);
+
 typedef std::pair<uint8_t, uint8_t> transition;
 
 struct LeakyPauliChannel {
@@ -26,10 +29,15 @@ struct LeakyPauliChannel {
     bool is_single_qubit_transition;
 
     LeakyPauliChannel(bool is_single_qubit_transition = true);
-    uint32_t num_transitions() const;
     void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
+    std::optional<std::pair<transition, double>> get_transitions_from_to(
+        uint8_t initial_status, uint8_t final_status) const;
     transition sample(uint8_t initial_status) const;
+    void safety_check() const;
+    std::string str() const;
 };
+
+std::ostream &operator<<(std::ostream &out, const LeakyPauliChannel &t);
 }  // namespace leaky
 
 #endif  // LEAKY_CHANNEL_H
