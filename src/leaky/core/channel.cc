@@ -4,12 +4,10 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cstdint>
-#include <cstdlib>
+#include <ios>
 #include <ostream>
 #include <sstream>
 #include <string>
-#include <sys/types.h>
 #include <utility>
 
 #include "leaky/core/rand_gen.h"
@@ -68,10 +66,12 @@ void leaky::LeakyPauliChannel::add_transition(
     auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
     if (it != initial_status_vec.end()) {
         auto idx = std::distance(initial_status_vec.begin(), it);
-        transitions[idx].push_back(std::make_pair(final_status, pauli_channel_idx));
+        transitions[idx].emplace_back(std::make_pair(final_status, pauli_channel_idx));
         auto &probs = cumulative_probs[idx];
         auto cum_prob = probs.back() + probability;
-        assert(cum_prob - 1.0 < 1e-6);
+        if (cum_prob > 1.0) {
+            throw std::runtime_error("The sum of probabilities for each initial status should not exceed 1!");
+        }
         probs.push_back(cum_prob);
     } else {
         initial_status_vec.push_back(initial_status);
@@ -121,8 +121,7 @@ void leaky::LeakyPauliChannel::safety_check() const {
         if (std::fabs(probs.back() - 1.0) > 1e-6) {
             throw std::runtime_error("The sum of probabilities for each initial status should be 1");
         }
-        for (size_t j = 0; j < transitions_from_initial.size(); j++) {
-            auto [final_status, pauli_channel_idx] = transitions_from_initial[j];
+        for (auto [final_status, pauli_channel_idx] : transitions_from_initial) {
             if (is_single_qubit_channel) {
                 auto transition_type = leaky::get_transition_type(initial_status, final_status);
                 if (transition_type != leaky::TransitionType::R && pauli_channel_idx != 0) {
@@ -185,13 +184,15 @@ std::string leaky::LeakyPauliChannel::str() const {
                 << ",\n";
         }
     }
+    if (initial_status_vec.empty()) {
+        out << "   None\n";
+    }
     return out.str();
 }
 
 std::string leaky::LeakyPauliChannel::repr() const {
     std::stringstream out;
-    out << "LeakyPauliChannel(is_single_qubit_channel=" << is_single_qubit_channel << ", with " << num_transitions()
-        << " transitions)\n";
-    out << str();
+    out << "LeakyPauliChannel(is_single_qubit_channel=" << std::boolalpha << is_single_qubit_channel << ", with "
+        << unsigned(num_transitions()) << " transitions attached)\n";
     return out.str();
 }

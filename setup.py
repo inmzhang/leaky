@@ -160,5 +160,5 @@ setup(
         "console_scripts": ["leaky=leaky._cli_argv:cli_argv"],
     },
     python_requires=">=3.7",
-    install_requires=[],
+    install_requires=['stim==1.13'],
 )

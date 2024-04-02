@@ -1,10 +1,9 @@
 #include "leaky/core/simulator.h"
 
-#include <cstdint>
 #include <functional>
+#include <iostream>
 #include <random>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "leaky/core/channel.h"
@@ -115,7 +114,6 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
     bool is_single_qubit_gate = stim::GATE_DATA[inst.gate_type].flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
     if (!binded_leaky_channels.empty()) {
         auto inst_id = std::hash<std::string>{}(inst.str());
-        ;
         auto it = binded_leaky_channels.find(inst_id);
         if (it != binded_leaky_channels.end()) {
             auto channel = it->second;
@@ -171,12 +169,12 @@ void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
     }
 }
 
-void leaky::Simulator::clear(bool clear_binded_channels) {
+void leaky::Simulator::clear(bool clear_bound_channels) {
     leakage_status = std::vector<uint8_t>(num_qubits, 0);
     leakage_masks_record.clear();
     tableau_simulator =
         stim::TableauSimulator<stim::MAX_BITWORD_WIDTH>{std::mt19937_64(leaky::global_urng()), leakage_status.size()};
-    if (clear_binded_channels) {
+    if (clear_bound_channels) {
         binded_leaky_channels.clear();
     }
 }

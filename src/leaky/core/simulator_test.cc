@@ -33,7 +33,18 @@ TEST(simulator, construct) {
     ASSERT_EQ(sim.leakage_masks_record.size(), 0);
 }
 
-TEST(simulator, do_simple_circuit_without_leak) {
+TEST(simulator, do_simple_circuit_without_leak1) {
+    Simulator sim(1);
+    sim.do_gate(OpDat("X", 0));
+    sim.do_gate(OpDat("M", 0));
+    ASSERT_EQ(sim.current_measurement_record().back(), 1);
+    auto circuit = stim::Circuit();
+    circuit.append_from_text("X 0\nM 0");
+    sim.do_circuit(circuit);
+    ASSERT_EQ(sim.current_measurement_record().back(), 0);
+}
+
+TEST(simulator, do_simple_circuit_without_leak2) {
     Simulator sim(2);
     sim.do_reset(OpDat("R", {0, 1}));
     sim.do_measurement(OpDat("M", {0, 1}));

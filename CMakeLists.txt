@@ -31,7 +31,8 @@ FetchContent_MakeAvailable(googletest)
 
 FetchContent_Declare(stim
         GIT_REPOSITORY https://github.com/quantumlib/stim.git
-        GIT_TAG 3e38d12d0a0fb3022646b694137b733a4700d300)
+        GIT_TAG b01e42391583d03db4266b387d907eda1d7ae488
+)
 FetchContent_MakeAvailable(stim)
 if (NOT (MSVC))
     target_compile_options(libstim PRIVATE -fno-strict-aliasing -fPIC ${ARCH_OPT})
@@ -51,6 +52,8 @@ set(TEST_FILES
         )
 
 set(PYTHON_API_FILES
+        src/leaky/core/channel.pybind.cc
+        src/leaky/core/simulator.pybind.cc
         src/leaky/core/rand_gen.pybind.cc
         src/leaky/leaky.pybind.cc
         )
@@ -92,7 +95,6 @@ gtest_discover_tests(leaky_tests)
 IF(EXISTS ${CMAKE_CURRENT_LIST_DIR}/pybind11/CMakeLists.txt)
     add_subdirectory(pybind11)
     pybind11_add_module(_cpp_leaky ${PYTHON_API_FILES} ${SOURCE_FILES_NO_MAIN})
-    include_directories(${PYTHON_INCLUDE_DIRS})
     target_link_libraries(_cpp_leaky PRIVATE libstim)
     target_compile_options(_cpp_leaky PRIVATE ${ARCH_OPT})
 else()

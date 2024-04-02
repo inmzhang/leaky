@@ -29,15 +29,15 @@ struct LeakyPauliChannel {
     std::vector<std::vector<double>> cumulative_probs;
     bool is_single_qubit_channel;
 
-    LeakyPauliChannel(bool is_single_qubit_transition = true);
+    explicit LeakyPauliChannel(bool is_single_qubit_transition = true);
     void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
-    std::optional<std::pair<transition, double>> get_transitions_from_to(
+    [[nodiscard]] std::optional<std::pair<transition, double>> get_transitions_from_to(
         uint8_t initial_status, uint8_t final_status) const;
-    uint8_t num_transitions() const;
-    transition sample(uint8_t initial_status) const;
+    [[nodiscard]] uint8_t num_transitions() const;
+    [[nodiscard]] transition sample(uint8_t initial_status) const;
     void safety_check() const;
-    std::string str() const;
-    std::string repr() const;
+    [[nodiscard]] std::string str() const;
+    [[nodiscard]] std::string repr() const;
 };
 
 }  // namespace leaky

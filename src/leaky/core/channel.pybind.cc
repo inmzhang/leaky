@@ -2,36 +2,37 @@
 
 #include "leaky/core/channel.h"
 #include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
+#include "stim.h"
 
-py::class_<leaky::LeakyPauliChannel> pybind_channel(py::module &m) {
-    return py::class_<leaky::LeakyPauliChannel>(m, "LeakyPauliChannel", R"pbdoc(
-        A generalized Pauli channel incorporating incoherent leakage transitions.
-     )pbdoc");
+py::class_<leaky::LeakyPauliChannel> leaky_pybind::pybind_channel(py::module &m) {
+    return {
+        m,
+        "LeakyPauliChannel",
+        stim::clean_doc_string(R"DOC(
+            A generalized Pauli channel incorporating incoherent leakage transitions.
+        )DOC")
+            .data()};
 }
 
-void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> &c) {
+void leaky_pybind::pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> &c) {
     c.def(
         py::init<bool>(),
         py::arg("is_single_qubit_channel"),
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             Initialize a `leaky.LeakyPauliChannel`.
 
             Args:
                 is_single_qubit_channel: Whether the channel is single-qubit or two-qubit.
-        )pbdoc");
-
-    c.def_property_readonly(
-        "is_single_qubit_channel",
-        &leaky::LeakyPauliChannel::is_single_qubit_channel,
-        R"pbdoc(
-            Whether the channel is single-qubit or two-qubit.
-        )pbdoc");
+        )DOC")
+            .data());
     c.def_property_readonly(
         "num_transitions",
         &leaky::LeakyPauliChannel::num_transitions,
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             The number of transitions in the channel.
-        )pbdoc");
+        )DOC")
+            .data());
     c.def(
         "add_transition",
         &leaky::LeakyPauliChannel::add_transition,
@@ -39,11 +40,13 @@ void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> 
         py::arg("final_status"),
         py::arg("pauli_channel_idx"),
         py::arg("probability"),
-        R"pbdoc(
+        stim::clean_doc_string(
+            R"DOC(
             Add a transition to the channel.
 
             Args:
-                initial_status: The initial status of the qubit(s). If the channel is single-qubit,
+                initial_status: The initial status of the qubit(s). If the channel is 
+                single-qubit,
                     this is a single status represented by a uint8. If the channel is two-qubit, 
                     this is a pair of status, which is a uint8 concatenated by two 4-bit status.
                 final_status: The final status of the qubit(s). If the channel is single-qubit,
@@ -54,13 +57,15 @@ void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> 
                     is the index of the Pauli in the order [II, IX, IY, IZ, XI, XX, XY, XZ, YI, YX, YY,
                     YZ, ZI, ZX, ZY, ZZ].
                 probability: The probability of the transition.
-        )pbdoc");
+        )DOC",
+            true)
+            .data());
     c.def(
         "get_transitions_from_to",
         &leaky::LeakyPauliChannel::get_transitions_from_to,
         py::arg("initial_status"),
         py::arg("final_status"),
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             Get the transitions from an initial status to a final status.
 
             Args:
@@ -69,12 +74,13 @@ void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> 
 
             Returns:
                 A pair of transition and probability.
-        )pbdoc");
+        )DOC")
+            .data());
     c.def(
         "sample",
         &leaky::LeakyPauliChannel::sample,
         py::arg("initial_status"),
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             Sample a transition from an initial status.
 
             Args:
@@ -82,23 +88,27 @@ void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> 
 
             Returns:
                 A transition.
-        )pbdoc");
+        )DOC")
+            .data());
     c.def(
         "safety_check",
         &leaky::LeakyPauliChannel::safety_check,
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             Check if the channel is valid.
-        )pbdoc");
+        )DOC")
+            .data());
     c.def(
         "__str__",
         &leaky::LeakyPauliChannel::str,
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             Print the transitions in the channel.
-        )pbdoc");
+        )DOC")
+            .data());
     c.def(
         "__repr__",
         &leaky::LeakyPauliChannel::repr,
-        R"pbdoc(
+        stim::clean_doc_string(R"DOC(
             Print the channel representation.
-        )pbdoc");
+        )DOC")
+            .data());
 }
