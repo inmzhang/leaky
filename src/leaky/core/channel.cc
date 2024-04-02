@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <ios>
 #include <ostream>
 #include <sstream>

@@ -56,6 +56,9 @@ set(PYTHON_API_FILES
         src/leaky/core/simulator.pybind.cc
         src/leaky/core/rand_gen.pybind.cc
         src/leaky/leaky.pybind.cc
+        ${stim_SOURCE_DIR}/src/stim/circuit/gate_target.pybind.cc
+        ${stim_SOURCE_DIR}/src/stim/circuit/circuit_instruction.pybind.cc
+        ${stim_SOURCE_DIR}/src/stim/py/base.pybind.h
         )
 
 add_executable(leaky src/main.cc ${SOURCE_FILES_NO_MAIN})
@@ -92,8 +95,11 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/" DESTINATION "include" FILES
 include(GoogleTest)
 gtest_discover_tests(leaky_tests)
 
+
 IF(EXISTS ${CMAKE_CURRENT_LIST_DIR}/pybind11/CMakeLists.txt)
     add_subdirectory(pybind11)
+    # In order to use `stim::PyCircuitInstruction`
+    # we need to compile with some stim's python api files
     pybind11_add_module(_cpp_leaky ${PYTHON_API_FILES} ${SOURCE_FILES_NO_MAIN})
     target_link_libraries(_cpp_leaky PRIVATE libstim)
     target_compile_options(_cpp_leaky PRIVATE ${ARCH_OPT})
