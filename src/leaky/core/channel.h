@@ -27,18 +27,19 @@ struct LeakyPauliChannel {
     std::vector<uint8_t> initial_status_vec;
     std::vector<std::vector<transition>> transitions;
     std::vector<std::vector<double>> cumulative_probs;
-    bool is_single_qubit_transition;
+    bool is_single_qubit_channel;
 
     LeakyPauliChannel(bool is_single_qubit_transition = true);
     void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
     std::optional<std::pair<transition, double>> get_transitions_from_to(
         uint8_t initial_status, uint8_t final_status) const;
+    uint8_t num_transitions() const;
     transition sample(uint8_t initial_status) const;
     void safety_check() const;
     std::string str() const;
+    std::string repr() const;
 };
 
-std::ostream &operator<<(std::ostream &out, const LeakyPauliChannel &t);
 }  // namespace leaky
 
 #endif  // LEAKY_CHANNEL_H

@@ -20,7 +20,7 @@ TEST(channel, transition_type) {
 
 TEST(channel, add_transition_1q) {
     auto channel = LeakyPauliChannel();
-    ASSERT_TRUE(channel.is_single_qubit_transition);
+    ASSERT_TRUE(channel.is_single_qubit_channel);
     channel.add_transition(0, 0, 0, 0.2);
     channel.add_transition(0, 0, 1, 0.3);
     channel.add_transition(0, 0, 2, 0.1);
@@ -49,7 +49,7 @@ TEST(channel, add_transition_1q) {
 
 TEST(channel, add_transition_2q) {
     auto channel = LeakyPauliChannel(false);
-    ASSERT_FALSE(channel.is_single_qubit_transition);
+    ASSERT_FALSE(channel.is_single_qubit_channel);
     channel.add_transition(0x00, 0x00, 6, 1.0);
     channel.add_transition(0x01, 0x10, 0, 1.0);
     ASSERT_EQ(channel.initial_status_vec.size(), 2);

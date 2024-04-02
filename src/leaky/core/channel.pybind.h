@@ -10,7 +10,7 @@ using namespace py::literals;
 namespace leaky_pybind {
 
 py::class_<leaky::LeakyPauliChannel> pybind_channel(py::module &m);
-void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> &s);
+void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> &c);
 
 }  // namespace leaky_pybind
 
