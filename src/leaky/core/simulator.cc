@@ -1,8 +1,10 @@
 #include "leaky/core/simulator.h"
 
-#include <array>
 #include <cstdint>
+#include <functional>
 #include <random>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "leaky/core/channel.h"
@@ -12,12 +14,12 @@
 
 using stim::GateType;
 
-leaky::Simulator::Simulator(uint32_t num_qubits, std::map<inst_id, const LeakyPauliChannel&> binded_leaky_channels)
+leaky::Simulator::Simulator(uint32_t num_qubits)
     : num_qubits(num_qubits),
       leakage_status(num_qubits, 0),
       leakage_masks_record(0),
-      binded_leaky_channels(binded_leaky_channels),
-      tableau_simulator(std::mt19937_64(leaky::global_urng()), num_qubits) {
+      tableau_simulator(std::mt19937_64(leaky::global_urng()), num_qubits),
+      binded_leaky_channels({}) {
 }
 
 void leaky::Simulator::handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::GateTarget target) {
@@ -38,8 +40,12 @@ void leaky::Simulator::handle_u_or_d(uint8_t cur_status, uint8_t next_status, st
 
 void leaky::Simulator::bind_leaky_channel(
     const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel) {
-    inst_id inst_key = {ideal_inst.gate_type, ideal_inst.args, ideal_inst.targets};
-    binded_leaky_channels.insert({inst_key, channel});
+    size_t inst_id = std::hash<std::string>{}(ideal_inst.str());
+    auto flags = stim::GATE_DATA[ideal_inst.gate_type].flags;
+    if (!(flags & stim::GATE_IS_UNITARY)) {
+        throw std::invalid_argument("Only unitary gates can be binded with a leaky channel.");
+    }
+    binded_leaky_channels.insert({inst_id, channel});
 }
 
 void leaky::Simulator::do_1q_leaky_pauli_channel(
@@ -107,6 +113,21 @@ void leaky::Simulator::do_reset(const stim::CircuitInstruction& inst) {
 
 void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
     bool is_single_qubit_gate = stim::GATE_DATA[inst.gate_type].flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
+    if (!binded_leaky_channels.empty()) {
+        auto inst_id = std::hash<std::string>{}(inst.str());
+        ;
+        auto it = binded_leaky_channels.find(inst_id);
+        if (it != binded_leaky_channels.end()) {
+            auto channel = it->second;
+            if (is_single_qubit_gate) {
+                do_1q_leaky_pauli_channel(inst, channel);
+            } else {
+                do_2q_leaky_pauli_channel(inst, channel);
+            }
+            return;
+        }
+    }
+
     size_t step = is_single_qubit_gate ? 1 : 2;
     const auto& targets = inst.targets;
     switch (inst.gate_type) {
@@ -134,6 +155,9 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
 }
 
 void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
+    if (circuit.count_qubits() != num_qubits) {
+        throw std::invalid_argument("The circuit has a different number of qubits than the simulator.");
+    }
     for (const auto& op : circuit.operations) {
         if (op.gate_type == GateType::REPEAT) {
             uint64_t repeats = op.repeat_block_rep_count();
@@ -142,23 +166,7 @@ void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
                 do_circuit(block);
             }
         } else {
-            auto inst_key = inst_id{op.gate_type, op.args, op.targets};
-            auto it = binded_leaky_channels.find(inst_key);
-            if (it != binded_leaky_channels.end()) {
-                auto channel = it->second;
-                auto flags = stim::GATE_DATA[op.gate_type].flags;
-                if (flags & stim::GATE_IS_UNITARY) {
-                    if (flags & stim::GATE_IS_SINGLE_QUBIT_GATE) {
-                        do_1q_leaky_pauli_channel(op, channel);
-                    } else {
-                        do_2q_leaky_pauli_channel(op, channel);
-                    }
-                } else {
-                    do_gate(op);
-                }
-            } else {
-                do_gate(op);
-            }
+            do_gate(op);
         }
     }
 }
@@ -181,7 +189,7 @@ std::vector<uint8_t> leaky::Simulator::current_measurement_record(ReadoutStrateg
     if (readout_strategy == ReadoutStrategy::RawLabel) {
         for (auto i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
-            results.push_back(mask == 0 ? (uint8_t)tableau_record[i] : mask);
+            results.push_back(mask == 0 ? (uint8_t)tableau_record[i] : mask + 1);
         }
     } else if (readout_strategy == ReadoutStrategy::RandomLeakageProjection) {
         for (auto i = 0; i < num_measurements; i++) {

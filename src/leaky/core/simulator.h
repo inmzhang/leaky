@@ -2,8 +2,7 @@
 #define LEAKY_SIMULATOR_H
 
 #include <cstdint>
-#include <map>
-#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "leaky/core/channel.h"
@@ -12,16 +11,13 @@
 
 namespace leaky {
 
-typedef std::tuple<stim::GateType, stim::SpanRef<const double>, stim::SpanRef<const stim::GateTarget>> inst_id;
-
 struct Simulator {
     uint32_t num_qubits;
     std::vector<uint8_t> leakage_status;
     std::vector<uint8_t> leakage_masks_record;
-    std::map<inst_id, const LeakyPauliChannel&> binded_leaky_channels;
     stim::TableauSimulator<stim::MAX_BITWORD_WIDTH> tableau_simulator;
 
-    Simulator(uint32_t num_qubits, std::map<inst_id, const LeakyPauliChannel&> binded_leaky_channels = {});
+    Simulator(uint32_t num_qubits);
 
     void bind_leaky_channel(const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel);
     void do_1q_leaky_pauli_channel(const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel);
@@ -34,6 +30,7 @@ struct Simulator {
     std::vector<uint8_t> current_measurement_record(ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
+    std::unordered_map<size_t, LeakyPauliChannel> binded_leaky_channels;
     void handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::GateTarget target);
 };
 
