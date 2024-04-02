@@ -1,8 +1,14 @@
 #include "leaky/core/simulator.pybind.h"
 
-#include <iostream>
 #include <iterator>
+#include <pybind11/cast.h>
+#include <pybind11/detail/common.h>
+#include <pybind11/pytypes.h>
 #include <vector>
+
+#include "leaky/core/rand_gen.h"
+#include "leaky/core/simulator.h"
+#include "stim/circuit/circuit_instruction.pybind.h"
 
 py::class_<leaky::Simulator> leaky_pybind::pybind_simulator(py::module &m) {
     return {
@@ -13,6 +19,13 @@ py::class_<leaky::Simulator> leaky_pybind::pybind_simulator(py::module &m) {
         )DOC")
             .data(),
     };
+}
+
+leaky::Simulator create_simulator(uint32_t num_qubits, const pybind11::object &seed) {
+    if (!seed.is_none()) {
+        leaky::set_seed(seed.cast<unsigned>());
+    }
+    return leaky::Simulator(num_qubits);
 }
 
 void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Simulator> &s) {
@@ -33,8 +46,10 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
         .export_values();
 
     s.def(
-        py::init<uint32_t>(),
+        py::init(&create_simulator),
         py::arg("num_qubits"),
+        pybind11::kw_only(),
+        py::arg("seed") = pybind11::none(),
         stim::clean_doc_string(R"DOC(
             Initialize a simulator with the given number of qubits.
 
@@ -56,21 +71,15 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
     s.def(
         "do",
         [](leaky::Simulator &self, const py::object &obj) {
-            if (py::isinstance<stim::Circuit>(obj)) {
-                std::cout << py::cast<stim::Circuit>(obj).str() << std::endl;
-                self.do_circuit(py::cast<stim::Circuit>(obj));
-            } else {
-                const stim::CircuitInstruction &circuit_instruction = py::cast<stim::CircuitInstruction>(obj);
-                self.do_gate(circuit_instruction);
-            }
+            auto inst = obj.cast<stim_pybind::PyCircuitInstruction>();
+            self.do_gate(inst);
         },
-        py::arg("circuit_or_instruction"),
+        py::arg("instruction"),
         stim::clean_doc_string(R"DOC(
-            Apply a circuit or instruction to the simulator.
+            Apply an instruction to the simulator.
 
             Args:
-                circuit_or_instruction: The `stim.Circuit` or `stim.CircuitInstruction`
-                    to apply.
+                instruction: The `stim.CircuitInstruction` to apply.
         ))DOC")
             .data());
     s.def(
@@ -149,5 +158,38 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
             Returns:
                 A numpy array of measurement results with `dtype=uint8`.
         ))DOC")
+            .data());
+    s.def(
+        "sample_batch",
+        [](leaky::Simulator &self,
+           const stim::Circuit &circuit,
+           py::ssize_t shots,
+           leaky::ReadoutStrategy readout_strategy = leaky::ReadoutStrategy::RawLabel) {
+            auto num_measurements = circuit.count_measurements();
+            // Allocate memory for the results
+            py::array_t<uint8_t> results = py::array_t<uint8_t>(shots * num_measurements);
+            results[py::make_tuple(py::ellipsis())] = 0;
+            py::buffer_info buff = results.request();
+            uint8_t *results_ptr = (uint8_t *)buff.ptr;
+
+            for (py::ssize_t i = 0; i < shots; i++) {
+                self.do_circuit(circuit);
+                self.append_measurement_record_into(results_ptr + i * num_measurements, readout_strategy);
+                self.clear();
+            }
+            results.resize({shots, (py::ssize_t)num_measurements});
+            return results;
+        },
+        stim::clean_doc_string(R"DOC(
+            Batch sample the measurement results of a circuit.
+
+            Args:
+                circuit: The circuit to sample.
+                shots: The number of shots.
+                readout_strategy: The readout strategy to use.
+
+            Returns:
+                A numpy array of measurement results with `dtype=uint8`.
+        )DOC")
             .data());
 }

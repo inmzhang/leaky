@@ -28,6 +28,7 @@ struct Simulator {
     void do_reset(const stim::CircuitInstruction& inst);
     void clear(bool clear_bound_channels = false);
     std::vector<uint8_t> current_measurement_record(ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
+    void append_measurement_record_into(uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
     std::unordered_map<size_t, LeakyPauliChannel> binded_leaky_channels;

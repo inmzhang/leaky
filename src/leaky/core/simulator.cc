@@ -1,7 +1,6 @@
 #include "leaky/core/simulator.h"
 
 #include <functional>
-#include <iostream>
 #include <random>
 #include <string>
 #include <vector>
@@ -10,6 +9,7 @@
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/readout_strategy.h"
 #include "stim.h"
+#include "stim/stabilizers/pauli_string_ref.h"
 
 using stim::GateType;
 
@@ -153,8 +153,9 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
 }
 
 void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
-    if (circuit.count_qubits() != num_qubits) {
-        throw std::invalid_argument("The circuit has a different number of qubits than the simulator.");
+    if (circuit.count_qubits() > num_qubits) {
+        throw std::invalid_argument(
+            "The number of qubits in the circuit exceeds the maximum capacity of the simulator.");
     }
     for (const auto& op : circuit.operations) {
         if (op.gate_type == GateType::REPEAT) {
@@ -172,35 +173,39 @@ void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
 void leaky::Simulator::clear(bool clear_bound_channels) {
     leakage_status = std::vector<uint8_t>(num_qubits, 0);
     leakage_masks_record.clear();
-    tableau_simulator =
-        stim::TableauSimulator<stim::MAX_BITWORD_WIDTH>{std::mt19937_64(leaky::global_urng()), leakage_status.size()};
+    tableau_simulator.inv_state = stim::Tableau<stim::MAX_BITWORD_WIDTH>::identity(num_qubits);
+    tableau_simulator.measurement_record.storage.clear();
     if (clear_bound_channels) {
         binded_leaky_channels.clear();
     }
 }
 
 std::vector<uint8_t> leaky::Simulator::current_measurement_record(ReadoutStrategy readout_strategy) {
-    std::vector<uint8_t> results;
+    auto results = std::vector<uint8_t>(leakage_masks_record.size());
+    append_measurement_record_into(results.data(), readout_strategy);
+    return results;
+}
+
+void leaky::Simulator::append_measurement_record_into(uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy) {
     auto tableau_record = tableau_simulator.measurement_record.storage;
     auto num_measurements = leakage_masks_record.size();
-    results.reserve(num_measurements);
     if (readout_strategy == ReadoutStrategy::RawLabel) {
         for (auto i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
-            results.push_back(mask == 0 ? (uint8_t)tableau_record[i] : mask + 1);
+            *(record_begin_ptr + i) = mask == 0 ? (uint8_t)tableau_record[i] : mask + 1;
         }
     } else if (readout_strategy == ReadoutStrategy::RandomLeakageProjection) {
         for (auto i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
-            results.push_back(mask == 0 ? (uint8_t)tableau_record[i] : (leaky::rand_float(0.0, 1.0) < 0.5 ? 0 : 1));
+            *(record_begin_ptr + i) =
+                mask == 0 ? (uint8_t)tableau_record[i] : (leaky::rand_float(0.0, 1.0) < 0.5 ? 0 : 1);
         }
     } else if (readout_strategy == ReadoutStrategy::DeterministicLeakageProjection) {
         for (auto i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
-            results.push_back(mask == 0 ? (uint8_t)tableau_record[i] : 1);
+            *(record_begin_ptr + i) = mask == 0 ? (uint8_t)tableau_record[i] : 1;
         }
     } else {
         throw std::invalid_argument("Invalid readout strategy.");
     }
-    return results;
 }
