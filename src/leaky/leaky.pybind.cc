@@ -1,5 +1,6 @@
+#include "leaky/core/channel.pybind.h"
 #include "leaky/core/rand_gen.pybind.h"
-#include "leaky/core/readout_strategy.h"
+#include "leaky/core/simulator.pybind.h"
 #include "pybind11/pybind11.h"
 
 namespace py = pybind11;
@@ -17,11 +18,10 @@ int leaky_main(const std::vector<std::string> &args) {
 
 PYBIND11_MODULE(_cpp_leaky, m) {
     leaky_pybind::pybind_rand_gen_methods(m);
-    py::enum_<leaky::ReadoutStrategy>(m, "ReadoutStrategy")
-        .value("RawLabel", leaky::ReadoutStrategy::RawLabel)
-        .value("RandomLeakageProjection", leaky::ReadoutStrategy::RandomLeakageProjection)
-        .value("DeterministicLeakageProjection", leaky::ReadoutStrategy::DeterministicLeakageProjection)
-        .export_values();
+    auto channel = leaky_pybind::pybind_channel(m);
+    leaky_pybind::pybind_channel_methods(m, channel);
+    auto simulator = leaky_pybind::pybind_simulator(m);
+    leaky_pybind::pybind_simulator_methods(m, simulator);
     m.def("main", &leaky_main, pybind11::kw_only(), pybind11::arg("command_line_args"), R"pbdoc(
 Runs the command line tool version of leaky with the given arguments.
 )pbdoc");
