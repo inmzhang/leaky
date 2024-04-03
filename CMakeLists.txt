@@ -61,14 +61,6 @@ set(PYTHON_API_FILES
         ${stim_SOURCE_DIR}/src/stim/py/base.pybind.h
         )
 
-add_executable(leaky src/main.cc ${SOURCE_FILES_NO_MAIN})
-
-target_compile_options(leaky PRIVATE ${ARCH_OPT})
-if (NOT (MSVC))
-    target_link_options(leaky PRIVATE -pthread ${ARCH_OPT})
-endif ()
-target_link_libraries(leaky libstim)
-install(TARGETS leaky RUNTIME DESTINATION bin)
 
 enable_testing()
 

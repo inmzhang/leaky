@@ -1,5 +1,7 @@
 #include "leaky/core/channel.pybind.h"
 
+#include <pybind11/pytypes.h>
+
 #include "leaky/core/channel.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
@@ -18,7 +20,7 @@ py::class_<leaky::LeakyPauliChannel> leaky_pybind::pybind_channel(py::module &m)
 void leaky_pybind::pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> &c) {
     c.def(
         py::init<bool>(),
-        py::arg("is_single_qubit_channel"),
+        py::arg("is_single_qubit_channel") = py::bool_(true),
         stim::clean_doc_string(R"DOC(
             Initialize a `leaky.LeakyPauliChannel`.
 

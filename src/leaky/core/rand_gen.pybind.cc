@@ -11,8 +11,8 @@ void leaky_pybind::pybind_rand_gen_methods(py::module &m) {
             Choose a random seed using std::random_device
 
             Examples:
-                >>> import pymatching
-                >>> pymatching.randomize()
+                >>> import leaky
+                >>> leaky.randomize()
         ))DOC")
             .data());
     m.def(
@@ -27,8 +27,8 @@ void leaky_pybind::pybind_rand_gen_methods(py::module &m) {
                     The seed for the random number generator (must be non-negative)
 
             Examples:
-                >>> import pymatching
-                >>> pymatching.set_seed(10)
+                >>> import leaky
+                >>> leaky.set_seed(10)
 
         ))DOC")
             .data());
@@ -36,16 +36,16 @@ void leaky_pybind::pybind_rand_gen_methods(py::module &m) {
     m.def(
         "rand_float",
         &leaky::rand_float,
-        "from"_a,
-        "to"_a,
+        "begin"_a,
+        "end"_a,
         stim::clean_doc_string(R"DOC(
             Generate a floating point number chosen uniformly at random
             over the interval between `from` and `to`
 
             Args:
-                from:
+                begin:
                     Smallest float that can be drawn from the distribution
-                to:
+                end:
                     Largest float that can be drawn from the distribution
 
             Returns:

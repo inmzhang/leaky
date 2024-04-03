@@ -16,13 +16,13 @@ void randomize();
 void set_seed(unsigned seed);
 
 /**
- * @brief A random double chosen uniformly at random between `from` and `to`
+ * @brief A random double chosen uniformly at random between `begin` and `end`
  *
- * @param from
- * @param to
+ * @param begin
+ * @param end
  * @return double
  */
-double rand_float(double from, double to);
+double rand_float(double begin, double end);
 } // namespace leaky
 
 #endif // LEAKY_RAND_GEN_H

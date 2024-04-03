@@ -173,9 +173,9 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
             uint8_t *results_ptr = (uint8_t *)buff.ptr;
 
             for (py::ssize_t i = 0; i < shots; i++) {
+                self.clear();
                 self.do_circuit(circuit);
                 self.append_measurement_record_into(results_ptr + i * num_measurements, readout_strategy);
-                self.clear();
             }
             results.resize({shots, (py::ssize_t)num_measurements});
             return results;
