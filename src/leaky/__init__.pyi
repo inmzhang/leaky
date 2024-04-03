@@ -5,10 +5,12 @@ from __future__ import annotations
 import enum
 from typing import Tuple, Optional, TYPE_CHECKING
 
+import numpy as np
+import numpy.typing as npt
+
 if TYPE_CHECKING:
     import leaky
     import stim
-    import numpy as np
 
 def randomize() -> None:
     """
@@ -341,7 +343,7 @@ class Simulator:
     def current_measurement_record(
         self,
         readout_strategy: "leaky.ReadoutStrategy" = ReadoutStrategy.RawLabel,
-    ) -> "np.typing.NDArray[np.uint8]":
+    ) -> npt.NDArray[np.uint8]:
         """Get the current measurement record.
 
         Args:
@@ -364,7 +366,7 @@ class Simulator:
         circuit: "stim.Circuit",
         shots: int,
         readout_strategy: "leaky.ReadoutStrategy" = ReadoutStrategy.RawLabel,
-    ) -> "np.typing.NDArray[np.uint8]":
+    ) -> npt.NDArray[np.uint8]:
         """Batch sample the measurement results of a circuit.
 
         Args:
