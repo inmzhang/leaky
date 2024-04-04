@@ -88,13 +88,14 @@ include(GoogleTest)
 gtest_discover_tests(leaky_tests)
 
 
-IF(EXISTS ${CMAKE_CURRENT_LIST_DIR}/pybind11/CMakeLists.txt)
-    add_subdirectory(pybind11)
+find_package(Python COMPONENTS Interpreter Development)
+find_package(pybind11 CONFIG)
+if (${pybind11_FOUND} AND ${Python_FOUND})
     # In order to use `stim::PyCircuitInstruction`
     # we need to compile with some stim's python api files
     pybind11_add_module(_cpp_leaky ${PYTHON_API_FILES} ${SOURCE_FILES_NO_MAIN})
     target_link_libraries(_cpp_leaky PRIVATE libstim)
     target_compile_options(_cpp_leaky PRIVATE ${ARCH_OPT})
 else()
-    message("WARNING: Skipped the pybind11 module _cpp_leaky because the `pybind11` git submodule isn't present. To fix, run `git submodule update --init --recursive`")
+  message("WARNING: Skipped stim_python_bindings target. `pybind11` not found. To fix, install pybind11. On debian based distributions, the package name is `pybind11-dev`")
 endif()
