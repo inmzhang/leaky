@@ -1,15 +1,14 @@
 # leaky
 
-> WIP: The project is in the early stages of development and is not well tested. The documentation is also incomplete.
-
-An unoptimized(slow) implementation of Google's Pauli+ simulator
+An implementation of Google's Pauli+ simulator. It uses `stim.TableauSimulator` internally and uses
+the C++ API directly to gain a speed boost.
 
 ## Installation
 
 ```bash
 git clone https://github.com/inmzhang/leaky.git
 cd leaky
-pip install -e .
+pip install .
 ```
 
 If you want to run the tests, you can install the test dependencies with
@@ -28,20 +27,17 @@ pytest --cov=src/leaky src/tests
 
 ```python
 import leaky
+import stim
 
-trans_collect = leaky.TransitionCollection()
-trans_collect.add_transition_table(
-    "H",
-    leaky.TransitionTable(
-        {
-            (0,): [leaky.Transition((0,), (1,), 1.0)],
-            (1,): [leaky.Transition((1,), (2,), 1.0)],
-            (2,): [leaky.Transition((2,), (0,), 1.0)],
-        }
-    ),
+channel = leaky.LeakyPauliChannel()
+channel.add_transition(
+    initial_status=0, # Computational space
+    final_status=1, # |2> leakage status
+    pauli_channel_idx=0,
+    probability=1.0,
 )
-simulator = leaky.Simulator(1, trans_collect)
-simulator.do("H", [0])
-simulator.measure([0])
+simulator = leaky.Simulator(num_qubits=1)
+simulator.do_1q_leaky_pauli_channel(stim.CircuitInstruction('X', [0]), channel)
+simulator.do(stim.CircuitInstruction('M', [0]))
 assert simulator.current_measurement_record() == [2]
 ```
