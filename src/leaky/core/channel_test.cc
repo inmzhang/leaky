@@ -1,7 +1,6 @@
 #include "leaky/core/channel.h"
 
 #include <algorithm>
-#include <optional>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -31,9 +30,10 @@ TEST(channel, add_transition_1q) {
     channel.add_transition(1, 1, 0, 0.3);
     channel.add_transition(1, 2, 0, 0.2);
     ASSERT_EQ(channel.initial_status_vec.size(), 2);
-    ASSERT_FLOAT_EQ(channel.get_transitions_from_to(0, 0).value().second, 0.2);
-    ASSERT_FLOAT_EQ(channel.get_transitions_from_to(0, 1).value().second, 0.95);
-    ASSERT_EQ(channel.get_transitions_from_to(0, 3), std::nullopt);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0, 0, 0), 0.2);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0, 0, 1), 0.3);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0, 1, 0), 0.15);
+    ASSERT_EQ(channel.get_prob_from_to(0, 3, 0), 0.0);
     ASSERT_EQ(channel.str(), R"(Transitions:
     |C> --I--> |C>: 0.2,
     |C> --X--> |C>: 0.3,
@@ -53,8 +53,8 @@ TEST(channel, add_transition_2q) {
     channel.add_transition(0x00, 0x00, 6, 1.0);
     channel.add_transition(0x01, 0x10, 0, 1.0);
     ASSERT_EQ(channel.initial_status_vec.size(), 2);
-    ASSERT_FLOAT_EQ(channel.get_transitions_from_to(0x00, 0x00).value().second, 1.0);
-    ASSERT_FLOAT_EQ(channel.get_transitions_from_to(0x01, 0x10).value().second, 1.0);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0x00, 0x00, 6), 1.0);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0x01, 0x10, 0), 1.0);
     ASSERT_EQ(channel.str(), R"(Transitions:
     |C>|C> --XY--> |C>|C>: 1,
     |C>|2> --II--> |2>|C>: 1,

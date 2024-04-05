@@ -1,5 +1,6 @@
 #include "leaky/core/channel.pybind.h"
 
+#include <pybind11/cast.h>
 #include <pybind11/pytypes.h>
 
 #include "leaky/core/channel.h"
@@ -63,10 +64,11 @@ void leaky_pybind::pybind_channel_methods(py::module &m, py::class_<leaky::Leaky
             true)
             .data());
     c.def(
-        "get_transitions_from_to",
-        &leaky::LeakyPauliChannel::get_transitions_from_to,
+        "get_prob_from_to",
+        &leaky::LeakyPauliChannel::get_prob_from_to,
         py::arg("initial_status"),
         py::arg("final_status"),
+        py::arg("pauli_idx"),
         stim::clean_doc_string(R"DOC(
             Get the transitions from an initial status to a final status.
 

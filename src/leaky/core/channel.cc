@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <ios>
+#include <iostream>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -68,8 +70,8 @@ void leaky::LeakyPauliChannel::add_transition(
         transitions[idx].emplace_back(std::make_pair(final_status, pauli_channel_idx));
         auto &probs = cumulative_probs[idx];
         auto cum_prob = probs.back() + probability;
-        if (cum_prob > 1.0) {
-            throw std::runtime_error("The sum of probabilities for each initial status should not exceed 1!");
+        if (cum_prob - 1.0 > 1e-9) {
+            throw std::runtime_error("sum of probabilities for each initial status should not exceed 1!");
         }
         probs.push_back(cum_prob);
     } else {
@@ -79,24 +81,25 @@ void leaky::LeakyPauliChannel::add_transition(
     }
 }
 
-std::optional<std::pair<leaky::transition, double>> leaky::LeakyPauliChannel::get_transitions_from_to(
-    uint8_t initial_status, uint8_t final_status) const {
+double leaky::LeakyPauliChannel::get_prob_from_to(
+    uint8_t initial_status, uint8_t final_status, uint8_t pauli_idx) const {
     auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
     if (it == initial_status_vec.end()) {
-        return std::nullopt;
+        return 0.0;
     }
     auto idx = std::distance(initial_status_vec.begin(), it);
     auto &transitions_from_initial = transitions[idx];
     auto &probs = cumulative_probs[idx];
-    auto it2 =
-        std::find_if(transitions_from_initial.begin(), transitions_from_initial.end(), [final_status](auto &trans) {
-            return trans.first == final_status;
+    auto it2 = std::find_if(
+        transitions_from_initial.begin(), transitions_from_initial.end(), [final_status, pauli_idx](auto &trans) {
+            return trans.first == final_status && trans.second == pauli_idx;
         });
     if (it2 == transitions_from_initial.end()) {
-        return std::nullopt;
+        return 0.0;
     }
     auto idx2 = std::distance(transitions_from_initial.begin(), it2);
-    return {std::make_pair(*it2, probs[idx2])};
+    auto prob = idx2 == 0 ? probs[idx2] : probs[idx2] - probs[idx2 - 1];
+    return prob;
 }
 
 leaky::transition leaky::LeakyPauliChannel::sample(uint8_t initial_status) const {

@@ -31,8 +31,7 @@ struct LeakyPauliChannel {
 
     explicit LeakyPauliChannel(bool is_single_qubit_transition = true);
     void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
-    [[nodiscard]] std::optional<std::pair<transition, double>> get_transitions_from_to(
-        uint8_t initial_status, uint8_t final_status) const;
+    [[nodiscard]] double get_prob_from_to(uint8_t initial_status, uint8_t final_status, uint8_t pauli_idx) const;
     [[nodiscard]] uint8_t num_transitions() const;
     [[nodiscard]] transition sample(uint8_t initial_status) const;
     void safety_check() const;
