@@ -4,6 +4,7 @@
 #include <pybind11/cast.h>
 #include <pybind11/detail/common.h>
 #include <pybind11/pytypes.h>
+#include <string>
 #include <vector>
 
 #include "leaky/core/rand_gen.h"
@@ -190,6 +191,13 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
 
             Returns:
                 A numpy array of measurement results with `dtype=uint8`.
+        )DOC")
+            .data());
+    s.def_readonly(
+        "bound_leaky_channels",
+        &leaky::Simulator::bound_leaky_channels,
+        stim::clean_doc_string(R"DOC(
+            The bound leaky pauli channels in the simulator.
         )DOC")
             .data());
 }

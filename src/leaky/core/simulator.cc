@@ -18,7 +18,7 @@ leaky::Simulator::Simulator(uint32_t num_qubits)
       leakage_status(num_qubits, 0),
       leakage_masks_record(0),
       tableau_simulator(std::mt19937_64(leaky::global_urng()), num_qubits),
-      binded_leaky_channels({}) {
+      bound_leaky_channels({}) {
 }
 
 void leaky::Simulator::handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::GateTarget target) {
@@ -44,7 +44,7 @@ void leaky::Simulator::bind_leaky_channel(
     if (!(flags & stim::GATE_IS_UNITARY)) {
         throw std::invalid_argument("Only unitary gates can be binded with a leaky channel.");
     }
-    binded_leaky_channels.insert({inst_id, channel});
+    bound_leaky_channels.insert({inst_id, channel});
 }
 
 void leaky::Simulator::do_1q_leaky_pauli_channel(
@@ -112,10 +112,10 @@ void leaky::Simulator::do_reset(const stim::CircuitInstruction& inst) {
 
 void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
     bool is_single_qubit_gate = stim::GATE_DATA[inst.gate_type].flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
-    if (!binded_leaky_channels.empty()) {
+    if (!bound_leaky_channels.empty()) {
         auto inst_id = std::hash<std::string>{}(inst.str());
-        auto it = binded_leaky_channels.find(inst_id);
-        if (it != binded_leaky_channels.end()) {
+        auto it = bound_leaky_channels.find(inst_id);
+        if (it != bound_leaky_channels.end()) {
             auto channel = it->second;
             if (is_single_qubit_gate) {
                 do_1q_leaky_pauli_channel(inst, channel);
@@ -176,7 +176,7 @@ void leaky::Simulator::clear(bool clear_bound_channels) {
     tableau_simulator.inv_state = stim::Tableau<stim::MAX_BITWORD_WIDTH>::identity(num_qubits);
     tableau_simulator.measurement_record.storage.clear();
     if (clear_bound_channels) {
-        binded_leaky_channels.clear();
+        bound_leaky_channels.clear();
     }
 }
 

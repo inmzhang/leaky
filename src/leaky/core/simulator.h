@@ -16,6 +16,7 @@ struct Simulator {
     std::vector<uint8_t> leakage_status;
     std::vector<uint8_t> leakage_masks_record;
     stim::TableauSimulator<stim::MAX_BITWORD_WIDTH> tableau_simulator;
+    std::unordered_map<size_t, LeakyPauliChannel> bound_leaky_channels;
 
     explicit Simulator(uint32_t num_qubits);
 
@@ -28,10 +29,10 @@ struct Simulator {
     void do_reset(const stim::CircuitInstruction& inst);
     void clear(bool clear_bound_channels = false);
     std::vector<uint8_t> current_measurement_record(ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
-    void append_measurement_record_into(uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
+    void append_measurement_record_into(
+        uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
-    std::unordered_map<size_t, LeakyPauliChannel> binded_leaky_channels;
     void handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::GateTarget target);
 };
 
