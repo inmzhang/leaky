@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import Sequence, Tuple, Optional, TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
@@ -107,26 +107,28 @@ class LeakyPauliChannel:
         """
         ...
 
-    def get_transitions_from_to(
-        self,
-        initial_status: int,
-        final_status: int,
-    ) -> Optional[Tuple[Tuple[int, int], float]]:
-        """Get the transitions from an initial status to a final status.
+    def get_prob_from_to(
+        self, initial_status: int, final_status: int, pauli_idx: int
+    ) -> float:
+        """Get the transition probability from an initial status to a final status with the
+        specified pauli channel index.
 
         Args:
             initial_status: The initial status of the qubit(s).
             final_status: The final status of the qubit(s).
+            pauli_idx: The index of the Pauli channel.
 
         Returns:
-            A pair of transition and probability if the transition exists, otherwise None.
+            The probability of the transition.
 
         Examples:
             >>> import leaky
             >>> channel = leaky.LeakyPauliChannel()
             >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> channel.get_transitions_from_to(0, 1)
-            ((1, 0), 0.5)
+            >>> channel.get_transitions_from_to(0, 1, 0)
+            0.5
+            >>> channel.get_transitions_from_to(0, 1, 1)
+            0.0
         """
         ...
 
@@ -379,3 +381,31 @@ class Simulator:
             is `(shots, circuit.num_measurements)`.
         """
         ...
+
+def decompose_kraus_operators_to_leaky_pauli_channel(
+    kraus_operators: Sequence[np.ndarray], num_qubits: int, num_level: int
+) -> LeakyPauliChannel:
+    """Decompose the Kraus operators into a leaky pauli channel representation with
+    Generalized Pauli Twirling(GPT).
+
+    Args:
+        kraus_operators: A sequence of Kraus operators corresponding to an operation's error channel.
+        num_qubits: The number of qubits in the operation.
+        num_level: The number of levels of the quantum system to be considered.
+
+    Returns:
+        A LeakyPauliChannel object representing the error channel.
+    """
+    ...
+
+def leakage_status_tuple_to_int(status: Tuple[int, ...]) -> int:
+    """Convert a leakage status tuple to an integer representation.
+
+    Args:
+        status: A tuple of leakage status. Currently, only support up to two
+            qubits.
+
+    Returns:
+        An integer representation of the leakage status.
+    """
+    ...
