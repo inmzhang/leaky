@@ -3,6 +3,7 @@ from leaky._cpp_leaky import (
     set_seed,
     rand_float,
     LeakyPauliChannel,
+    Instruction,
     Simulator,
     ReadoutStrategy,
 )
@@ -16,6 +17,7 @@ from leaky.utils import (
 __all__ = [
     "__version__",
     "LeakyPauliChannel",
+    "Instruction",
     "Simulator",
     "ReadoutStrategy",
     "randomize",

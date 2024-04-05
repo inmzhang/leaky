@@ -54,11 +54,9 @@ set(TEST_FILES
 set(PYTHON_API_FILES
         src/leaky/core/channel.pybind.cc
         src/leaky/core/simulator.pybind.cc
+        src/leaky/core/instruction.pybind.cc
         src/leaky/core/rand_gen.pybind.cc
         src/leaky/leaky.pybind.cc
-        ${stim_SOURCE_DIR}/src/stim/circuit/gate_target.pybind.cc
-        ${stim_SOURCE_DIR}/src/stim/circuit/circuit_instruction.pybind.cc
-        ${stim_SOURCE_DIR}/src/stim/py/base.pybind.h
         )
 
 

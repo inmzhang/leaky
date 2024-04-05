@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Sequence, Tuple, Optional, TYPE_CHECKING
+from typing import Iterable, List, Sequence, Tuple, Optional, TYPE_CHECKING, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -200,6 +200,42 @@ class LeakyPauliChannel:
         """
         ...
 
+class Instruction:
+    """An instruction almost the same as `stim.CircuitInstruction`.
+
+    This is a simplified re-implemented since `stim.PyCircuitInstruction` is not exposed
+    by `libstim` C++ API.
+    """
+    def __init__(
+        self,
+        gate_name: str,
+        targets: Union[int, stim.GateTarget, Iterable[Union[int, stim.GateTarget]]],
+        arg: Iterable[float] = (),
+    ) -> None:
+        """Initialize an `leaky.Instruction`.
+
+        Args:
+            name: The name of the operation's gate (e.g. "H" or "M" or "CNOT").
+            targets: The objects operated on by the gate. This can be either a
+                single target or an iterable of multiple targets to broadcast the
+                gate over. Each target can be an integer (a qubit), a
+                stim.GateTarget, or a special target from one of the `stim.target_*`
+                methods (such as a measurement record target like `rec[-1]` from
+                `stim.target_rec(-1)`).
+            arg: The "parens arguments" for the gate, such as the probability for a
+                noise operation. A list of doubles parameterizing the gate. Different
+                gates take different parens arguments. For example, X_ERROR takes a
+                probability, OBSERVABLE_INCLUDE takes an observable index, and
+                PAULI_CHANNEL_1 takes three disjoint probabilities.
+
+        Examples:
+            >>> import leaky
+            >>> instruction1 = leaky.Instruction("X", [0])
+            >>> instruction2 = leaky.Instruction("CNOT", [0, 1])
+            >>> instruction3 = leaky.Instruction("DEPOLARIZE1", [0], [0.1])
+        """
+        ...
+
 class ReadoutStrategy(enum.Enum):
     """The strategy for readout simulating results."""
 
@@ -244,16 +280,15 @@ class Simulator:
         """
         ...
 
-    def do(self, instruction: "stim.CircuitInstruction") -> None:
+    def do(self, instruction: "leaky.Instruction") -> None:
         """Apply an instruction to the simulator.
 
         Args:
-            instruction: The `stim.CircuitInstruction` to apply.
+            instruction: The `leaky.Instruction` to apply.
 
         Examples:
-            >>> import stim
             >>> import leaky
-            >>> instruction = stim.CircuitInstruction("X", [0])
+            >>> instruction = leaky.Instruction("X", [0])
             >>> simulator = leaky.Simulator(1)
             >>> simulator.do(instruction)
         """
@@ -261,7 +296,7 @@ class Simulator:
 
     def do_1q_leaky_pauli_channel(
         self,
-        ideal_inst: "stim.CircuitInstruction",
+        ideal_inst: "leaky.Instruction",
         channel: "leaky.LeakyPauliChannel",
     ) -> None:
         """Apply a single qubit leaky Pauli channel to a circuit instruction.
@@ -271,9 +306,8 @@ class Simulator:
             channel: The leaky channel to apply.
 
         Examples:
-            >>> import stim
             >>> import leaky
-            >>> instruction = stim.CircuitInstruction("X", [0])
+            >>> instruction = leaky.Instruction("X", [0])
             >>> channel = leaky.LeakyPauliChannel()
             >>> channel.add_transition(0, 1, 0, 1.0)
             >>> simulator = leaky.Simulator(1)
@@ -283,7 +317,7 @@ class Simulator:
 
     def do_2q_leaky_pauli_channel(
         self,
-        ideal_inst: "stim.CircuitInstruction",
+        ideal_inst: "leaky.Instruction",
         channel: "leaky.LeakyPauliChannel",
     ) -> None:
         """Apply a two qubit leaky Pauli channel to a circuit instruction.
@@ -293,9 +327,8 @@ class Simulator:
             channel: The leaky channel to apply.
 
         Examples:
-            >>> import stim
             >>> import leaky
-            >>> instruction = stim.CircuitInstruction("CNOT", [0, 1])
+            >>> instruction = leaky.Instruction("CNOT", [0, 1])
             >>> channel = leaky.LeakyPauliChannel(is_single_qubit_channel=False)
             >>> channel.add_transition(0, 1, 0, 1.0)
             >>> simulator = leaky.Simulator(2)
@@ -305,7 +338,7 @@ class Simulator:
 
     def bind_leaky_channel(
         self,
-        ideal_inst: "stim.CircuitInstruction",
+        ideal_inst: "leaky.Instruction",
         channel: "leaky.LeakyPauliChannel",
     ) -> None:
         """Bind a leaky channel to a circuit instruction.
@@ -318,9 +351,8 @@ class Simulator:
             channel: The leaky channel to bind.
 
         Examples:
-            >>> import stim
             >>> import leaky
-            >>> instruction = stim.CircuitInstruction("X", [0])
+            >>> instruction = leaky.Instruction("X", [0])
             >>> channel = leaky.LeakyPauliChannel()
             >>> channel.add_transition(0, 1, 0, 1.0)
             >>> simulator = leaky.Simulator(1)
