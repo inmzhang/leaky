@@ -7,22 +7,18 @@ the C++ API directly to gain a speed boost.
 
 ## Installation
 
+### From PyPI
+
+```bash
+pip install leakysim
+```
+
+### Built from source
+
 ```bash
 git clone https://github.com/inmzhang/leaky.git
 cd leaky
 pip install .
-```
-
-If you want to run the tests, you can install the test dependencies with
-
-```bash
-pip install pytest pytest-cov
-```
-
-and then run the tests with
-
-```bash
-pytest --cov=src/leaky src/tests
 ```
 
 ## Basic usage
