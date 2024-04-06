@@ -27,7 +27,6 @@ pytest --cov=src/leaky src/tests
 
 ```python
 import leaky
-import stim
 
 channel = leaky.LeakyPauliChannel()
 channel.add_transition(
@@ -37,7 +36,7 @@ channel.add_transition(
     probability=1.0,
 )
 simulator = leaky.Simulator(num_qubits=1)
-simulator.do_1q_leaky_pauli_channel(stim.CircuitInstruction('X', [0]), channel)
-simulator.do(stim.CircuitInstruction('M', [0]))
+simulator.do_1q_leaky_pauli_channel(leaky.Instruction('X', [0]), channel)
+simulator.do(leaky.Instruction('M', [0]))
 assert simulator.current_measurement_record() == [2]
 ```

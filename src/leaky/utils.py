@@ -130,7 +130,7 @@ def _l2p(leakage_status: LeakageStatus) -> ProjectStatus:
 def _get_projector_slice(
     num_level: int,
     project_status: ProjectStatus,
-) -> list[int]:
+) -> List[int]:
     """Get slice into the matrix for the subspace projection defined by project_status."""
     num_qubits = len(project_status)
     status = project_status[0]
@@ -155,7 +155,7 @@ def _project_kraus_with_initial_final(
 
 def _scatter_status(
     initial: LeakageStatus, final: LeakageStatus
-) -> list[tuple[ProjectStatus, ProjectStatus]]:
+) -> List[Tuple[ProjectStatus, ProjectStatus]]:
     initial_project_status = _l2p(initial)
     final_project_status = _l2p(final)
 
