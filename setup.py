@@ -5,7 +5,7 @@ import subprocess
 import sys
 from shutil import which
 
-from setuptools import Extension, setup
+from setuptools import Extension, setup, find_packages
 from setuptools.command.build_ext import build_ext
 
 # Convert distutils Windows platform specifiers to CMake -A arguments
@@ -154,8 +154,8 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     ext_modules=[CMakeExtension("leaky._cpp_leaky")],
-    packages=["leaky"],
-    package_dir={"leaky": "src/leaky"},
+    packages=find_packages("src"),
+    package_dir={"": "src"},
     package_data={
         "": [*HEADER_FILES, "src/leaky/__init__.pyi", "pyproject.toml"]
     },
