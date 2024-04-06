@@ -92,8 +92,8 @@ TEST(channel, sample) {
     std::vector<uint8_t> pauli_idx_vec;
     for (size_t i = 0; i < 1000; i++) {
         auto transition = channel.sample(0);
-        final_status_vec.push_back(transition.first);
-        pauli_idx_vec.push_back(transition.second);
+        final_status_vec.push_back(transition.value().first);
+        pauli_idx_vec.push_back(transition.value().second);
     }
     ASSERT_TRUE(std::all_of(final_status_vec.begin(), final_status_vec.end(), [](uint8_t x) {
         return x == 0;
@@ -103,4 +103,6 @@ TEST(channel, sample) {
         ASSERT_TRUE(count > 200);
         ASSERT_TRUE(count < 300);
     }
+
+    ASSERT_FALSE(channel.sample(1).has_value());
 }

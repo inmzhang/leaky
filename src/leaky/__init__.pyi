@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Iterable, List, Sequence, Tuple, Optional, TYPE_CHECKING, Union
+from typing import Iterable, Sequence, Tuple, Optional, TYPE_CHECKING, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -132,7 +132,7 @@ class LeakyPauliChannel:
         """
         ...
 
-    def sample(self, initial_status: int) -> Tuple[int, int]:
+    def sample(self, initial_status: int) -> Optional[Tuple[int, int]]:
         """Sample a transition from an initial status.
 
         Args:

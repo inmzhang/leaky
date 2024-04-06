@@ -56,7 +56,11 @@ void leaky::Simulator::do_1q_leaky_pauli_channel(
         if (cur_status == 0) {
             tableau_simulator.do_gate(ideal_inst);
         }
-        auto [next_status, pauli_channel_idx] = channel.sample(cur_status);
+        auto sample = channel.sample(cur_status);
+        if (!sample.has_value()) {
+            return;
+        }
+        auto [next_status, pauli_channel_idx] = sample.value();
         leakage_status[qubit] = next_status;
         handle_u_or_d(cur_status, next_status, q);
         auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, true);
@@ -78,7 +82,11 @@ void leaky::Simulator::do_2q_leaky_pauli_channel(
         if (cur_status == 0) {
             tableau_simulator.do_gate(ideal_inst);
         }
-        auto [next_status, pauli_channel_idx] = channel.sample(cur_status);
+        auto sample = channel.sample(cur_status);
+        if (!sample.has_value()) {
+            return;
+        }
+        auto [next_status, pauli_channel_idx] = sample.value();
         uint8_t ns1 = next_status >> 4;
         uint8_t ns2 = next_status & 0x0F;
         leakage_status[q1] = ns1;

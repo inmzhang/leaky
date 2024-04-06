@@ -6,6 +6,7 @@
 #include <cmath>
 #include <ios>
 #include <iostream>
+#include <optional>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -102,14 +103,17 @@ double leaky::LeakyPauliChannel::get_prob_from_to(
     return prob;
 }
 
-leaky::transition leaky::LeakyPauliChannel::sample(uint8_t initial_status) const {
+std::optional<leaky::transition> leaky::LeakyPauliChannel::sample(uint8_t initial_status) const {
     auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
+    if (it == initial_status_vec.end()) {
+        return std::nullopt;
+    }
     auto idx = std::distance(initial_status_vec.begin(), it);
     auto &probabilities = cumulative_probs[idx];
     auto rand_num = leaky::rand_float(0.0, 1.0);
     auto it2 = std::upper_bound(probabilities.begin(), probabilities.end(), rand_num);
     auto idx2 = std::distance(probabilities.begin(), it2);
-    return transitions[idx][idx2];
+    return {transitions[idx][idx2]};
 }
 
 /// Do safety check for the channel

@@ -158,3 +158,14 @@ TEST(simulator, bind_leaky_channel) {
     ASSERT_TRUE(sim.leakage_masks_record[0] == 1);
     ASSERT_TRUE(sim.current_measurement_record()[0] == 2);
 }
+
+TEST(simulator, repeated_leaky_ops) {
+    Simulator sim(1);
+    LeakyPauliChannel channel(true);
+    channel.add_transition(0, 1, 0, 1);
+    sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
+    sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
+    sim.do_measurement(OpDat("M", 0));
+    ASSERT_TRUE(sim.leakage_masks_record[0] == 1);
+    ASSERT_TRUE(sim.current_measurement_record()[0] == 2);
+}

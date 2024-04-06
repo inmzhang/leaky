@@ -33,7 +33,7 @@ struct LeakyPauliChannel {
     void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
     [[nodiscard]] double get_prob_from_to(uint8_t initial_status, uint8_t final_status, uint8_t pauli_idx) const;
     [[nodiscard]] uint8_t num_transitions() const;
-    [[nodiscard]] transition sample(uint8_t initial_status) const;
+    [[nodiscard]] std::optional<transition> sample(uint8_t initial_status) const;
     void safety_check() const;
     [[nodiscard]] std::string str() const;
     [[nodiscard]] std::string repr() const;
