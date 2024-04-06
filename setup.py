@@ -146,7 +146,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="Leaky",
+    name="leakysim",
     version=version["__version__"],
     author="Yiming Zhang",
     url="https://github.com/inmzhang/leaky",
