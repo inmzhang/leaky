@@ -163,9 +163,9 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
             } else {
                 do_2q_leaky_pauli_channel(split_inst, channel);
             }
-            return;
+        } else {
+            do_gate_without_leak(split_inst);
         }
-        do_gate_without_leak(split_inst);
     }
 }
 
