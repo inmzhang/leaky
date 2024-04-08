@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <iostream>
 #include <random>
 #include <string>
 #include <vector>
@@ -98,8 +99,8 @@ void leaky::Simulator::do_2q_leaky_pauli_channel(
         handle_u_or_d(cs2, ns2, t2);
 
         auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, false);
-        tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_str.substr(0, 1)).id, {}, t1});
-        tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_str.substr(1, 1)).id, {}, t2});
+        tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_str.c_str(), 1).id, {}, t1});
+        tableau_simulator.do_gate({stim::GATE_DATA.at(&pauli_str.c_str()[1], 1).id, {}, t2});
     }
 }
 
