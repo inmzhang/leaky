@@ -137,7 +137,7 @@ jobs:
       - name: Build and install
         run: python -m pip install --verbose -e .
 
-      - name: Test with stim and rustworkx using coverage
+      - name: Test with pytest
         run: python -m pytest src/leaky
 
   upload_pypi:
@@ -152,6 +152,5 @@ jobs:
         with:
           name: dists
           path: dist/
-          merge-multiple: true
 
       - uses: pypa/gh-action-pypi-publish@release/v1
