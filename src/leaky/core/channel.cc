@@ -125,7 +125,9 @@ void leaky::LeakyPauliChannel::safety_check() const {
         auto &transitions_from_initial = transitions[i];
         auto &probs = cumulative_probs[i];
         if (std::fabs(probs.back() - 1.0) > 1e-6) {
-            throw std::runtime_error("The sum of probabilities for each initial status should be 1");
+            throw std::runtime_error(
+                "The sum of probabilities for each initial status should be 1, but get " +
+                std::to_string(probs.back()));
         }
         for (auto [final_status, pauli_channel_idx] : transitions_from_initial) {
             if (is_single_qubit_channel) {
