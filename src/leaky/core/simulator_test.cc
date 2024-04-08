@@ -169,3 +169,18 @@ TEST(simulator, repeated_leaky_ops) {
     ASSERT_TRUE(sim.leakage_masks_record[0] == 1);
     ASSERT_TRUE(sim.current_measurement_record()[0] == 2);
 }
+
+TEST(simulator, multi_targets_ops) {
+    Simulator sim(4);
+    sim.do_gate(OpDat("R", {0, 1, 2, 3}));
+    sim.do_gate(OpDat("X", {0, 1}));
+    sim.do_measurement(OpDat("M", {0, 1, 2, 3}));
+    ASSERT_TRUE(sim.current_measurement_record() == std::vector<uint8_t>({1, 1, 0, 0}));
+
+    sim.clear();
+    auto channel = LeakyPauliChannel(true);
+    channel.add_transition(0, 0, 0, 1);
+    sim.do_1q_leaky_pauli_channel(OpDat("X", {0, 1}), channel);
+    sim.do_measurement(OpDat("M", {0, 1}));
+    ASSERT_TRUE(sim.current_measurement_record() == std::vector<uint8_t>({1, 1}));
+}

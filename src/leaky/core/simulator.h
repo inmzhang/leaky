@@ -33,7 +33,8 @@ struct Simulator {
         uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
-    void handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::GateTarget target);
+    void do_gate_without_leak(const stim::CircuitInstruction& inst);
+    void handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target);
 };
 
 }  // namespace leaky
