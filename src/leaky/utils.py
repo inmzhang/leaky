@@ -27,7 +27,10 @@ TWO_QUBITS_PAULIS = np.array(
 
 
 def decompose_kraus_operators_to_leaky_pauli_channel(
-    kraus_operators: Sequence[np.ndarray], num_qubits: int, num_level: int
+    kraus_operators: Sequence[np.ndarray],
+    num_qubits: int,
+    num_level: int,
+    safety_check: bool = True,
 ) -> LeakyPauliChannel:
     """Decompose the Kraus operators into a leaky pauli channel representation with
     Generalized Pauli Twirling(GPT).
@@ -36,6 +39,11 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
         kraus_operators: A sequence of Kraus operators corresponding to an operation's error channel.
         num_qubits: The number of qubits in the operation.
         num_level: The number of levels of the quantum system to be considered.
+        safety_check: If True, perform a safety check to ensure the channel is valid.
+            A channel is valid if the sum of the probabilities of all transitions
+            from a given initial status is 1. And the pauli channel related to the
+            qubits with transition type that not in R(stay in the computational space)
+            should always be I. Default is True.
 
     Returns:
         A LeakyPauliChannel object representing the error channel.
@@ -106,7 +114,8 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
                         idx,
                         p,
                     )
-    channel.safety_check()
+    if safety_check:
+        channel.safety_check()
     return channel
 
 
