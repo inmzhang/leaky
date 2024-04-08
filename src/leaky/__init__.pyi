@@ -415,7 +415,10 @@ class Simulator:
         ...
 
 def decompose_kraus_operators_to_leaky_pauli_channel(
-    kraus_operators: Sequence[np.ndarray], num_qubits: int, num_level: int, safety_check: bool = True
+    kraus_operators: Sequence[np.ndarray],
+    num_qubits: int,
+    num_level: int,
+    safety_check: bool = True,
 ) -> LeakyPauliChannel:
     """Decompose the Kraus operators into a leaky pauli channel representation with
     Generalized Pauli Twirling(GPT).
