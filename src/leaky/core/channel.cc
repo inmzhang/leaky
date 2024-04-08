@@ -14,14 +14,14 @@
 
 #include "leaky/core/rand_gen.h"
 
-static std::array<std::string, 4> PAULI_1Q = {
+static const std::array<std::string, 4> PAULI_1Q = {
     "I",
     "X",
     "Y",
     "Z",
 };
 
-static std::array<std::string, 16> PAULI_2Q = {
+static const std::array<std::string, 16> PAULI_2Q = {
     "II",
     "IX",
     "IY",
@@ -110,7 +110,7 @@ std::optional<leaky::transition> leaky::LeakyPauliChannel::sample(uint8_t initia
     }
     auto idx = std::distance(initial_status_vec.begin(), it);
     auto &probabilities = cumulative_probs[idx];
-    auto rand_num = leaky::rand_float(0.0, 1.0);
+    auto rand_num = leaky::rand_float(0.0, probabilities.back());
     auto it2 = std::upper_bound(probabilities.begin(), probabilities.end(), rand_num);
     auto idx2 = std::distance(probabilities.begin(), it2);
     return {transitions[idx][idx2]};
