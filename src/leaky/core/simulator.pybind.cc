@@ -10,6 +10,7 @@
 #include "leaky/core/instruction.pybind.h"
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/simulator.h"
+#include "stim.h"
 
 py::class_<leaky::Simulator> leaky_pybind::pybind_simulator(py::module &m) {
     return {m, "Simulator"};
@@ -30,7 +31,14 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
         .export_values();
 
     s.def(py::init(&create_simulator), py::arg("num_qubits"), pybind11::kw_only(), py::arg("seed") = pybind11::none());
-    s.def("do_circuit", &leaky::Simulator::do_circuit, py::arg("circuit"));
+    s.def(
+        "do_circuit",
+        [](leaky::Simulator &self, const py::object &circuit) {
+            auto circuit_str = pybind11::cast<std::string>(pybind11::str(circuit));
+            stim::Circuit converted_circuit = stim::Circuit(circuit_str.c_str());
+            self.do_circuit(converted_circuit);
+        },
+        py::arg("circuit"));
     s.def(
         "do",
         [](leaky::Simulator &self, const leaky_pybind::LeakyInstruction &instruction) {
@@ -91,10 +99,12 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
     s.def(
         "sample_batch",
         [](leaky::Simulator &self,
-           const stim::Circuit &circuit,
+           const py::object &circuit,
            py::ssize_t shots,
-           leaky::ReadoutStrategy readout_strategy = leaky::ReadoutStrategy::RawLabel) {
-            auto num_measurements = circuit.count_measurements();
+           leaky::ReadoutStrategy readout_strategy) {
+            auto circuit_str = pybind11::cast<std::string>(pybind11::str(circuit));
+            stim::Circuit converted_circuit = stim::Circuit(circuit_str.c_str());
+            auto num_measurements = converted_circuit.count_measurements();
             // Allocate memory for the results
             py::array_t<uint8_t> results = py::array_t<uint8_t>(shots * num_measurements);
             results[py::make_tuple(py::ellipsis())] = 0;
@@ -103,11 +113,14 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
 
             for (py::ssize_t i = 0; i < shots; i++) {
                 self.clear();
-                self.do_circuit(circuit);
+                self.do_circuit(converted_circuit);
                 self.append_measurement_record_into(results_ptr + i * num_measurements, readout_strategy);
             }
             results.resize({shots, (py::ssize_t)num_measurements});
             return results;
-        });
+        },
+        py::arg("circuit"),
+        py::arg("shots"),
+        py::arg("readout_strategy") = leaky::ReadoutStrategy::RawLabel);
     s.def_readonly("bound_leaky_channels", &leaky::Simulator::bound_leaky_channels);
 }
