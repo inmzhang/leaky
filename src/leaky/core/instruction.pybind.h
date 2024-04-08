@@ -10,6 +10,8 @@ using namespace py::literals;
 
 namespace leaky_pybind {
 
+stim::GateTarget obj_to_gate_target(const pybind11::object &obj);
+
 struct LeakyInstruction {
     stim::GateType gate_type;
     std::vector<stim::GateTarget> targets;

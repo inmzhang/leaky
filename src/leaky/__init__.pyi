@@ -209,17 +209,16 @@ class Instruction:
     def __init__(
         self,
         gate_name: str,
-        targets: Union[int, stim.GateTarget, Iterable[Union[int, stim.GateTarget]]],
+        targets: Iterable[Union[int, stim.GateTarget]],
         arg: Iterable[float] = (),
     ) -> None:
         """Initialize an `leaky.Instruction`.
 
         Args:
             name: The name of the operation's gate (e.g. "H" or "M" or "CNOT").
-            targets: The objects operated on by the gate. This can be either a
-                single target or an iterable of multiple targets to broadcast the
-                gate over. Each target can be an integer (a qubit), a
-                stim.GateTarget, or a special target from one of the `stim.target_*`
+            targets: The objects operated on by the gate. This isan iterable of multiple
+                targets to broadcast the gate over. Each target can be an integer (a qubit),
+                a stim.GateTarget, or a special target from one of the `stim.target_*`
                 methods (such as a measurement record target like `rec[-1]` from
                 `stim.target_rec(-1)`).
             arg: The "parens arguments" for the gate, such as the probability for a
@@ -294,45 +293,51 @@ class Simulator:
         """
         ...
 
-    def do_1q_leaky_pauli_channel(
+    def apply_1q_leaky_pauli_channel(
         self,
-        ideal_inst: "leaky.Instruction",
+        targets: Iterable[Union[int, stim.GateTarget]],
         channel: "leaky.LeakyPauliChannel",
     ) -> None:
         """Apply a single qubit leaky Pauli channel to a circuit instruction.
 
         Args:
-            ideal_inst: The ideal circuit instruction to apply the channel to.
+            targets: The objects operated on by the gate. This isan iterable of multiple
+                targets to broadcast the gate over. Each target can be an integer (a qubit),
+                a stim.GateTarget, or a special target from one of the `stim.target_*`
+                methods (such as a measurement record target like `rec[-1]` from
+                `stim.target_rec(-1)`).
             channel: The leaky channel to apply.
 
         Examples:
             >>> import leaky
-            >>> instruction = leaky.Instruction("X", [0])
             >>> channel = leaky.LeakyPauliChannel()
             >>> channel.add_transition(0, 1, 0, 1.0)
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do_1q_leaky_pauli_channel(instruction, channel)
+            >>> simulator.apply_1q_leaky_pauli_channel([0, 1], channel)
         """
         ...
 
-    def do_2q_leaky_pauli_channel(
+    def apply_2q_leaky_pauli_channel(
         self,
-        ideal_inst: "leaky.Instruction",
+        targets: "leaky.Instruction",
         channel: "leaky.LeakyPauliChannel",
     ) -> None:
         """Apply a two qubit leaky Pauli channel to a circuit instruction.
 
         Args:
-            ideal_inst: The ideal circuit instruction to apply the channel to.
+            targets: The objects operated on by the gate. This isan iterable of multiple
+                targets to broadcast the gate over. Each target can be an integer (a qubit),
+                a stim.GateTarget, or a special target from one of the `stim.target_*`
+                methods (such as a measurement record target like `rec[-1]` from
+                `stim.target_rec(-1)`).
             channel: The leaky channel to apply.
 
         Examples:
             >>> import leaky
-            >>> instruction = leaky.Instruction("CNOT", [0, 1])
             >>> channel = leaky.LeakyPauliChannel(is_single_qubit_channel=False)
             >>> channel.add_transition(0, 1, 0, 1.0)
             >>> simulator = leaky.Simulator(2)
-            >>> simulator.do_2q_leaky_pauli_channel(instruction, channel)
+            >>> simulator.do_2q_leaky_pauli_channel([0, 1, 2, 3], channel)
         """
         ...
 

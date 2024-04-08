@@ -38,23 +38,31 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
         },
         py::arg("instruction"));
     s.def(
-        "do_1q_leaky_pauli_channel",
+        "apply_1q_leaky_pauli_channel",
         [](leaky::Simulator &self,
-           const leaky_pybind::LeakyInstruction &ideal_inst,
+           const std::vector<pybind11::object> &target_objs,
            const leaky::LeakyPauliChannel &channel) {
-            self.do_1q_leaky_pauli_channel(ideal_inst, channel);
+            auto targets = std::vector<stim::GateTarget>();
+            for (const auto &obj : target_objs) {
+                targets.push_back(leaky_pybind::obj_to_gate_target(obj));
+            }
+            self.apply_1q_leaky_pauli_channel({targets}, channel);
         },
-        py::arg("ideal_inst"),
+        py::arg("targets"),
         py::arg("channel"));
     s.def(
-        "do_2q_leaky_pauli_channel",
+        "apply_2q_leaky_pauli_channel",
 
         [](leaky::Simulator &self,
-           const leaky_pybind::LeakyInstruction &ideal_inst,
+           const std::vector<pybind11::object> &target_objs,
            const leaky::LeakyPauliChannel &channel) {
-            self.do_2q_leaky_pauli_channel(ideal_inst, channel);
+            auto targets = std::vector<stim::GateTarget>();
+            for (const auto &obj : target_objs) {
+                targets.push_back(leaky_pybind::obj_to_gate_target(obj));
+            }
+            self.apply_2q_leaky_pauli_channel({targets}, channel);
         },
-        py::arg("ideal_inst"),
+        py::arg("targets"),
         py::arg("channel"));
     s.def(
         "bind_leaky_channel",

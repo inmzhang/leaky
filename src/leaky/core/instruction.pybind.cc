@@ -18,7 +18,7 @@ stim::GateTarget handle_to_gate_target(const pybind11::handle &obj) {
         "target argument wasn't a qubit index, a result from a `stim.target_*` method, or a `stim.GateTarget`.");
 }
 
-stim::GateTarget obj_to_gate_target(const pybind11::object &obj) {
+stim::GateTarget leaky_pybind::obj_to_gate_target(const pybind11::object &obj) {
     return handle_to_gate_target(obj);
 }
 

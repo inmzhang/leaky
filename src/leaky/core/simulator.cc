@@ -11,7 +11,7 @@
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/readout_strategy.h"
 #include "stim.h"
-#include "stim/circuit/circuit_instruction.h"
+#include "stim/gates/gates.h"
 
 using stim::GateType;
 
@@ -49,16 +49,12 @@ void leaky::Simulator::bind_leaky_channel(
     bound_leaky_channels.insert({inst_id, channel});
 }
 
-void leaky::Simulator::do_1q_leaky_pauli_channel(
-    const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel) {
-    auto targets = ideal_inst.targets;
+void leaky::Simulator::apply_1q_leaky_pauli_channel(
+    stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel) {
     for (size_t i = 0; i < targets.size(); i++) {
         auto qubit = targets[i].data;
         auto target = targets.sub(i, i + 1);
         uint8_t cur_status = leakage_status[qubit];
-        if (cur_status == 0) {
-            tableau_simulator.do_gate({ideal_inst.gate_type, ideal_inst.args, target});
-        }
         auto sample = channel.sample(cur_status);
         if (!sample.has_value()) {
             return;
@@ -71,9 +67,8 @@ void leaky::Simulator::do_1q_leaky_pauli_channel(
     }
 }
 
-void leaky::Simulator::do_2q_leaky_pauli_channel(
-    const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel) {
-    auto targets = ideal_inst.targets;
+void leaky::Simulator::apply_2q_leaky_pauli_channel(
+    stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel) {
     for (size_t k = 0; k < targets.size(); k += 2) {
         auto t1 = targets.sub(k, k + 1);
         auto t2 = targets.sub(k + 1, k + 2);
@@ -83,9 +78,6 @@ void leaky::Simulator::do_2q_leaky_pauli_channel(
         auto cs1 = leakage_status[q1];
         auto cs2 = leakage_status[q2];
         uint8_t cur_status = (cs1 << 4) | cs2;
-        if (cur_status == 0) {
-            tableau_simulator.do_gate({ideal_inst.gate_type, ideal_inst.args, pair});
-        }
         auto sample = channel.sample(cur_status);
         if (!sample.has_value()) {
             return;
@@ -120,52 +112,55 @@ void leaky::Simulator::do_reset(const stim::CircuitInstruction& inst) {
     tableau_simulator.do_gate(inst);
 }
 
-void leaky::Simulator::do_gate_without_leak(const stim::CircuitInstruction& inst) {
-    switch (inst.gate_type) {
-        case GateType::M:
-            do_measurement(inst);
-            break;
-        case GateType::R:
-            do_reset(inst);
-            break;
-        case GateType::MR:
-            do_measurement(inst);
-            do_reset(inst);
-            break;
-        case GateType::MX:
-        case GateType::MY:
-        case GateType::RX:
-        case GateType::RY:
-        case GateType::MRX:
-        case GateType::MRY:
-        case GateType::MPP:
-            throw std::invalid_argument("Only Z basis measurements and resets are supported in the leaky simulator.");
-        default:
-            tableau_simulator.do_gate(inst);
+bool leaky::Simulator::all_target_is_in_r(stim::SpanRef<const stim::GateTarget> targets, bool is_single_target) {
+    if (is_single_target) {
+        return leakage_status[targets[0].data] == 0;
     }
+    return ((leakage_status[targets[0].data] << 4) | leakage_status[targets[1].data]) == 0;
 }
 
 void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
-    if (bound_leaky_channels.empty()) {
-        do_gate_without_leak(inst);
+    // Handle measurements and resets.
+    auto gate_type = inst.gate_type;
+    auto flags = stim::GATE_DATA[gate_type].flags;
+    if (flags & stim::GATE_HAS_NO_EFFECT_ON_QUBITS) {
         return;
+    } else if (gate_type == GateType::M) {
+        do_measurement(inst);
+        return;
+    } else if (gate_type == GateType::R) {
+        do_reset(inst);
+        return;
+    } else if (gate_type == GateType::MR) {
+        do_measurement(inst);
+        do_reset(inst);
+        return;
+    } else if (
+        gate_type == GateType::MX || gate_type == GateType::MY || gate_type == GateType::RX ||
+        gate_type == GateType::RY || gate_type == GateType::MRX || gate_type == GateType::MRY ||
+        gate_type == GateType::MPP) {
+        throw std::invalid_argument("Only Z basis measurements and resets are supported in the leaky simulator.");
     }
-    bool is_single_qubit_gate = stim::GATE_DATA[inst.gate_type].flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
+    bool is_single_qubit_gate = flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
+
     size_t step = is_single_qubit_gate ? 1 : 2;
     for (size_t i = 0; i < inst.targets.size(); i += step) {
         auto targets = inst.targets.sub(i, i + step);
-        const stim::CircuitInstruction split_inst = {inst.gate_type, inst.args, targets};
+        const stim::CircuitInstruction split_inst = {gate_type, inst.args, targets};
+        // If all qubits are in the R state, we can apply the ideal gate.
+        if (all_target_is_in_r(targets, is_single_qubit_gate)) {
+            tableau_simulator.do_gate(split_inst);
+        }
         const auto inst_id = std::hash<std::string>{}(split_inst.str());
         auto it = bound_leaky_channels.find(inst_id);
-        if (it != bound_leaky_channels.end()) {
-            auto channel = it->second;
-            if (is_single_qubit_gate) {
-                do_1q_leaky_pauli_channel(split_inst, channel);
-            } else {
-                do_2q_leaky_pauli_channel(split_inst, channel);
-            }
+        if (it == bound_leaky_channels.end()) {
+            continue;
+        }
+        const auto& channel = it->second;
+        if (is_single_qubit_gate) {
+            apply_1q_leaky_pauli_channel(targets, channel);
         } else {
-            do_gate_without_leak(split_inst);
+            apply_2q_leaky_pauli_channel(targets, channel);
         }
     }
 }

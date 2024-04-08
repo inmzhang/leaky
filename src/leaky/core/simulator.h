@@ -8,6 +8,8 @@
 #include "leaky/core/channel.h"
 #include "leaky/core/readout_strategy.h"
 #include "stim.h"
+#include "stim/circuit/circuit_instruction.h"
+#include "stim/circuit/gate_target.h"
 
 namespace leaky {
 
@@ -21,19 +23,19 @@ struct Simulator {
     explicit Simulator(uint32_t num_qubits);
 
     void bind_leaky_channel(const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel);
-    void do_1q_leaky_pauli_channel(const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel);
-    void do_2q_leaky_pauli_channel(const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel);
+    void apply_1q_leaky_pauli_channel(stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel);
+    void apply_2q_leaky_pauli_channel(stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel);
     void do_gate(const stim::CircuitInstruction& inst);
-    void do_circuit(const stim::Circuit& circuit);
     void do_measurement(const stim::CircuitInstruction& inst);
     void do_reset(const stim::CircuitInstruction& inst);
+    void do_circuit(const stim::Circuit& circuit);
     void clear(bool clear_bound_channels = false);
     std::vector<uint8_t> current_measurement_record(ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
     void append_measurement_record_into(
         uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
-    void do_gate_without_leak(const stim::CircuitInstruction& inst);
+    bool all_target_is_in_r(stim::SpanRef<const stim::GateTarget> targets, bool is_single_target);
     void handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target);
 };
 

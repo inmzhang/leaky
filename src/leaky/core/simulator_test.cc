@@ -80,7 +80,9 @@ TEST(simulator, do_1q_leaky_channel) {
     channel.add_transition(0, 0, 1, 0.5);
     channel.add_transition(0, 1, 0, 0.5);
     for (auto i = 0; i < 1000; i++) {
-        sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
+        auto dat = OpDat("X", 0);
+        sim.do_gate(dat);
+        sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
         sim.do_measurement(OpDat("M", 0));
         ASSERT_TRUE(sim.leakage_masks_record[0] == 0 || sim.leakage_masks_record[0] == 1);
         auto result = sim.current_measurement_record();
@@ -93,7 +95,10 @@ TEST(simulator, readout_strategy) {
     Simulator sim(1);
     LeakyPauliChannel channel(true);
     channel.add_transition(0, 2, 0, 1);
-    sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
+
+    auto dat = OpDat("X", 0);
+    sim.do_gate(dat);
+    sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
     sim.do_measurement(OpDat("M", 0));
     ASSERT_EQ(sim.current_measurement_record()[0], 3);
     ASSERT_EQ(sim.current_measurement_record(ReadoutStrategy::DeterministicLeakageProjection)[0], 1);
@@ -105,7 +110,9 @@ TEST(simulator, do_2q_leaky_channel) {
     Simulator sim(2);
     LeakyPauliChannel channel(true);
     channel.add_transition(0x00, 0x01, 4, 1);
-    sim.do_2q_leaky_pauli_channel(OpDat("CZ", {0, 1}), channel);
+    auto dat = OpDat("CZ", {0, 1});
+    sim.do_gate(dat);
+    sim.apply_2q_leaky_pauli_channel({dat.targets}, channel);
     sim.do_measurement(OpDat("M", {0, 1}));
     ASSERT_TRUE(sim.leakage_masks_record[0] == 0);
     ASSERT_TRUE(sim.leakage_masks_record[1] == 1);
@@ -121,8 +128,11 @@ TEST(simulator, leaked_qubit_trans_down) {
     channel.add_transition(0, 1, 0, 1);
     channel.add_transition(1, 0, 0, 1);
     for (auto i = 0; i < 1000; i++) {
-        sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
-        sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
+        auto dat = OpDat("X", 0);
+        sim.do_gate(dat);
+        sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
+        sim.do_gate(dat);
+        sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
         sim.do_measurement(OpDat("M", 0));
         counts[sim.current_measurement_record()[0]]++;
         sim.clear();
@@ -139,7 +149,8 @@ TEST(simulator, qubit_leaked_up) {
     for (auto i = 0; i < 1000; i++) {
         sim.do_gate(OpDat("H", 0));
         sim.do_gate(OpDat("CNOT", {0, 1}));
-        sim.do_1q_leaky_pauli_channel(OpDat("I", 1), channel);
+        auto dat = OpDat("I", 1);
+        sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
         sim.do_measurement(OpDat("M", 0));
         counts[sim.current_measurement_record()[0]]++;
         sim.clear();
@@ -163,8 +174,11 @@ TEST(simulator, repeated_leaky_ops) {
     Simulator sim(1);
     LeakyPauliChannel channel(true);
     channel.add_transition(0, 1, 0, 1);
-    sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
-    sim.do_1q_leaky_pauli_channel(OpDat("X", 0), channel);
+    auto dat = OpDat("X", 0);
+    sim.do_gate(dat);
+    sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
+    sim.do_gate(dat);
+    sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
     sim.do_measurement(OpDat("M", 0));
     ASSERT_TRUE(sim.leakage_masks_record[0] == 1);
     ASSERT_TRUE(sim.current_measurement_record()[0] == 2);
@@ -175,12 +189,14 @@ TEST(simulator, multi_targets_ops) {
     sim.do_gate(OpDat("R", {0, 1, 2, 3}));
     sim.do_gate(OpDat("X", {0, 1}));
     sim.do_measurement(OpDat("M", {0, 1, 2, 3}));
-    ASSERT_TRUE(sim.current_measurement_record() == std::vector<uint8_t>({1, 1, 0, 0}));
+    ASSERT_EQ(sim.current_measurement_record(), std::vector<uint8_t>({1, 1, 0, 0}));
 
     sim.clear();
     auto channel = LeakyPauliChannel(true);
     channel.add_transition(0, 0, 0, 1);
-    sim.do_1q_leaky_pauli_channel(OpDat("X", {0, 1}), channel);
+    auto dat = OpDat("X", {0, 1});
+    sim.do_gate(dat);
+    sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
     sim.do_measurement(OpDat("M", {0, 1}));
     ASSERT_TRUE(sim.current_measurement_record() == std::vector<uint8_t>({1, 1}));
 }
