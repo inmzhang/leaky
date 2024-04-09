@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <iostream>
 #include <random>
 #include <string>
 #include <vector>
@@ -101,7 +100,7 @@ void leaky::Simulator::do_measurement(const stim::CircuitInstruction& inst) {
     for (auto q : targets) {
         leakage_masks_record.push_back(leakage_status[q.qubit_value()]);
     }
-    tableau_simulator.do_gate(inst);
+    tableau_simulator.do_MRZ(inst);
 }
 
 void leaky::Simulator::do_reset(const stim::CircuitInstruction& inst) {
@@ -109,14 +108,7 @@ void leaky::Simulator::do_reset(const stim::CircuitInstruction& inst) {
     for (auto q : targets) {
         leakage_status[q.qubit_value()] = 0;
     }
-    tableau_simulator.do_gate(inst);
-}
-
-bool leaky::Simulator::all_target_is_in_r(stim::SpanRef<const stim::GateTarget> targets, bool is_single_target) {
-    if (is_single_target) {
-        return leakage_status[targets[0].data] == 0;
-    }
-    return ((leakage_status[targets[0].data] << 4) | leakage_status[targets[1].data]) == 0;
+    tableau_simulator.do_RZ(inst);
 }
 
 void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
@@ -142,15 +134,18 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
         throw std::invalid_argument("Only Z basis measurements and resets are supported in the leaky simulator.");
     }
     bool is_single_qubit_gate = flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
-
     size_t step = is_single_qubit_gate ? 1 : 2;
     for (size_t i = 0; i < inst.targets.size(); i += step) {
         auto targets = inst.targets.sub(i, i + step);
         const stim::CircuitInstruction split_inst = {gate_type, inst.args, targets};
         // If all qubits are in the R state, we can apply the ideal gate.
-        if (all_target_is_in_r(targets, is_single_qubit_gate)) {
+        bool all_target_is_in_r = is_single_qubit_gate
+                                      ? leakage_status[targets[0].data] == 0
+                                      : ((leakage_status[targets[0].data] << 4) | leakage_status[targets[1].data]) == 0;
+        if (all_target_is_in_r) {
             tableau_simulator.do_gate(split_inst);
         }
+        // QUITE SLOW: NEED TO GET RID OF THIS HASHING AND FIND
         const auto inst_id = std::hash<std::string>{}(split_inst.str());
         auto it = bound_leaky_channels.find(inst_id);
         if (it == bound_leaky_channels.end()) {

@@ -1,7 +1,6 @@
 #ifndef LEAKY_INSTRUCTION_PYBIND_H
 #define LEAKY_INSTRUCTION_PYBIND_H
 
-#include "leaky/core/channel.h"
 #include "pybind11/pybind11.h"
 #include "stim.h"
 

@@ -8,8 +8,6 @@
 #include "leaky/core/channel.h"
 #include "leaky/core/readout_strategy.h"
 #include "stim.h"
-#include "stim/circuit/circuit_instruction.h"
-#include "stim/circuit/gate_target.h"
 
 namespace leaky {
 
@@ -35,7 +33,6 @@ struct Simulator {
         uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
-    bool all_target_is_in_r(stim::SpanRef<const stim::GateTarget> targets, bool is_single_target);
     void handle_u_or_d(uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target);
 };
 
