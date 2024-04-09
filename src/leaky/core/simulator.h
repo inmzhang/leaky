@@ -23,9 +23,7 @@ struct Simulator {
     void bind_leaky_channel(const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel);
     void apply_1q_leaky_pauli_channel(stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel);
     void apply_2q_leaky_pauli_channel(stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel);
-    void do_gate(const stim::CircuitInstruction& inst);
-    void do_measurement(const stim::CircuitInstruction& inst);
-    void do_reset(const stim::CircuitInstruction& inst);
+    void do_gate(const stim::CircuitInstruction& inst, bool look_up_bound_channels = true);
     void do_circuit(const stim::Circuit& circuit);
     void clear(bool clear_bound_channels = false);
     std::vector<uint8_t> current_measurement_record(ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);

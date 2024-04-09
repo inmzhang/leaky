@@ -4,13 +4,13 @@
 #include <functional>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "leaky/core/channel.h"
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/readout_strategy.h"
 #include "stim.h"
-#include "stim/gates/gates.h"
 
 using stim::GateType;
 
@@ -95,57 +95,49 @@ void leaky::Simulator::apply_2q_leaky_pauli_channel(
     }
 }
 
-void leaky::Simulator::do_measurement(const stim::CircuitInstruction& inst) {
-    const auto& targets = inst.targets;
-    for (auto q : targets) {
-        leakage_masks_record.push_back(leakage_status[q.qubit_value()]);
-    }
-    tableau_simulator.do_MRZ(inst);
-}
-
-void leaky::Simulator::do_reset(const stim::CircuitInstruction& inst) {
-    const auto& targets = inst.targets;
-    for (auto q : targets) {
-        leakage_status[q.qubit_value()] = 0;
-    }
-    tableau_simulator.do_RZ(inst);
-}
-
-void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
+void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst, bool look_up_bound_channels) {
     // Handle measurements and resets.
     auto gate_type = inst.gate_type;
+    auto targets = inst.targets;
     auto flags = stim::GATE_DATA[gate_type].flags;
+    // Skip annotations.
     if (flags & stim::GATE_HAS_NO_EFFECT_ON_QUBITS) {
         return;
-    } else if (gate_type == GateType::M) {
-        do_measurement(inst);
-        return;
-    } else if (gate_type == GateType::R) {
-        do_reset(inst);
-        return;
-    } else if (gate_type == GateType::MR) {
-        do_measurement(inst);
-        do_reset(inst);
-        return;
-    } else if (
-        gate_type == GateType::MX || gate_type == GateType::MY || gate_type == GateType::RX ||
-        gate_type == GateType::RY || gate_type == GateType::MRX || gate_type == GateType::MRY ||
-        gate_type == GateType::MPP) {
-        throw std::invalid_argument("Only Z basis measurements and resets are supported in the leaky simulator.");
     }
+    // Encounter measurements: add leakage masks to the record
+    if (flags & stim::GATE_PRODUCES_RESULTS) {
+        for (auto q : targets) {
+            leakage_masks_record.push_back(leakage_status[q.qubit_value()]);
+        }
+    }
+    // Encounter resets: reset the leakage status of the qubits
+    if (flags & stim::GATE_IS_RESET) {
+        for (auto q : targets) {
+            leakage_status[q.qubit_value()] = 0;
+        }
+    }
+    if (flags & stim::GATE_PRODUCES_RESULTS || flags & stim::GATE_IS_RESET) {
+        tableau_simulator.do_gate(inst);
+        return;
+    }
+
     bool is_single_qubit_gate = flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
     size_t step = is_single_qubit_gate ? 1 : 2;
-    for (size_t i = 0; i < inst.targets.size(); i += step) {
-        auto targets = inst.targets.sub(i, i + step);
-        const stim::CircuitInstruction split_inst = {gate_type, inst.args, targets};
+    for (size_t i = 0; i < targets.size(); i += step) {
+        auto split_targets = targets.sub(i, i + step);
+        stim::CircuitInstruction split_inst = {gate_type, inst.args, split_targets};
         // If all qubits are in the R state, we can apply the ideal gate.
-        bool all_target_is_in_r = is_single_qubit_gate
-                                      ? leakage_status[targets[0].data] == 0
-                                      : ((leakage_status[targets[0].data] << 4) | leakage_status[targets[1].data]) == 0;
+        bool all_target_is_in_r =
+            is_single_qubit_gate
+                ? leakage_status[split_targets[0].data] == 0
+                : ((leakage_status[split_targets[0].data] << 4) | leakage_status[split_targets[1].data]) == 0;
         if (all_target_is_in_r) {
             tableau_simulator.do_gate(split_inst);
         }
-        // QUITE SLOW: NEED TO GET RID OF THIS HASHING AND FIND
+        if (!look_up_bound_channels) {
+            continue;
+        }
+        // Look up the bound leaky channel for the ideal gate.
         const auto inst_id = std::hash<std::string>{}(split_inst.str());
         auto it = bound_leaky_channels.find(inst_id);
         if (it == bound_leaky_channels.end()) {
@@ -153,9 +145,9 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
         }
         const auto& channel = it->second;
         if (is_single_qubit_gate) {
-            apply_1q_leaky_pauli_channel(targets, channel);
+            apply_1q_leaky_pauli_channel(split_targets, channel);
         } else {
-            apply_2q_leaky_pauli_channel(targets, channel);
+            apply_2q_leaky_pauli_channel(split_targets, channel);
         }
     }
 }

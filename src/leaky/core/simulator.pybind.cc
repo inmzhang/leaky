@@ -1,5 +1,6 @@
 #include "leaky/core/simulator.pybind.h"
 
+#include <cstddef>
 #include <iterator>
 #include <pybind11/cast.h>
 #include <pybind11/detail/common.h>
@@ -11,6 +12,40 @@
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/simulator.h"
 #include "stim.h"
+
+struct ChannelResolvedCircuit {
+    std::vector<stim::CircuitInstruction> instructions;
+    std::vector<std::pair<stim::SpanRef<const stim::GateTarget>, const leaky::LeakyPauliChannel &>> channels;
+    std::vector<std::pair<bool, size_t>> order;
+};
+
+ChannelResolvedCircuit resolve_bound_channels_in_circuit(
+    const leaky::Simulator &simulator, const stim::Circuit &flatten_circuit) {
+    ChannelResolvedCircuit resolved_circuit;
+    resolved_circuit.instructions = flatten_circuit.operations;
+    size_t instruction_idx = 0;
+    size_t channel_idx = 0;
+    for (const auto &op : flatten_circuit.operations) {
+        resolved_circuit.order.push_back({true, instruction_idx++});
+        auto gate_type = op.gate_type;
+        auto targets = op.targets;
+        auto flags = stim::GATE_DATA[gate_type].flags;
+        bool is_single_qubit_gate = flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
+        size_t step = is_single_qubit_gate ? 1 : 2;
+        for (size_t i = 0; i < targets.size(); i += step) {
+            auto split_targets = targets.sub(i, i + step);
+            stim::CircuitInstruction split_inst = {gate_type, op.args, split_targets};
+            const auto inst_id = std::hash<std::string>{}(split_inst.str());
+            auto it = simulator.bound_leaky_channels.find(inst_id);
+            if (it == simulator.bound_leaky_channels.end()) {
+                continue;
+            }
+            resolved_circuit.channels.push_back({split_targets, it->second});
+            resolved_circuit.order.push_back({false, channel_idx++});
+        }
+    }
+    return resolved_circuit;
+}
 
 py::class_<leaky::Simulator> leaky_pybind::pybind_simulator(py::module &m) {
     return {m, "Simulator"};
@@ -41,10 +76,11 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
         py::arg("circuit"));
     s.def(
         "do",
-        [](leaky::Simulator &self, const leaky_pybind::LeakyInstruction &instruction) {
-            self.do_gate(instruction);
+        [](leaky::Simulator &self, const leaky_pybind::LeakyInstruction &instruction, bool look_up_bound_channels) {
+            self.do_gate(instruction, look_up_bound_channels);
         },
-        py::arg("instruction"));
+        py::arg("instruction"),
+        py::arg("look_up_bound_channels") = true);
     s.def(
         "apply_1q_leaky_pauli_channel",
         [](leaky::Simulator &self,
@@ -103,7 +139,8 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
            py::ssize_t shots,
            leaky::ReadoutStrategy readout_strategy) {
             auto circuit_str = pybind11::cast<std::string>(pybind11::str(circuit));
-            stim::Circuit converted_circuit = stim::Circuit(circuit_str.c_str());
+            stim::Circuit converted_circuit = stim::Circuit(circuit_str.c_str()).flattened();
+            auto resolved_circuit = resolve_bound_channels_in_circuit(self, converted_circuit);
             auto num_measurements = converted_circuit.count_measurements();
             // Allocate memory for the results
             py::array_t<uint8_t> results = py::array_t<uint8_t>(shots * num_measurements);
@@ -113,7 +150,18 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
 
             for (py::ssize_t i = 0; i < shots; i++) {
                 self.clear();
-                self.do_circuit(converted_circuit);
+                for (const auto [is_instruction, idx] : resolved_circuit.order) {
+                    if (is_instruction) {
+                        self.do_gate(resolved_circuit.instructions[idx], false);
+                    } else {
+                        const auto &[targets, channel] = resolved_circuit.channels[idx];
+                        if (targets.size() == 1) {
+                            self.apply_1q_leaky_pauli_channel(targets, channel);
+                        } else {
+                            self.apply_2q_leaky_pauli_channel(targets, channel);
+                        }
+                    }
+                }
                 self.append_measurement_record_into(results_ptr + i * num_measurements, readout_strategy);
             }
             results.resize({shots, (py::ssize_t)num_measurements});

@@ -46,11 +46,11 @@ TEST(simulator, do_simple_circuit_without_leak1) {
 
 TEST(simulator, do_simple_circuit_without_leak2) {
     Simulator sim(2);
-    sim.do_reset(OpDat("R", {0, 1}));
-    sim.do_measurement(OpDat("M", {0, 1}));
+    sim.do_gate(OpDat("R", {0, 1}));
+    sim.do_gate(OpDat("M", {0, 1}));
     sim.do_gate(OpDat("H", 0));
     sim.do_gate(OpDat("CNOT", {0, 1}));
-    sim.do_measurement(OpDat("M", {0, 1}));
+    sim.do_gate(OpDat("M", {0, 1}));
     auto result = sim.current_measurement_record();
     ASSERT_EQ(result.size(), 4);
     ASSERT_EQ(result[0], 0);
@@ -83,7 +83,7 @@ TEST(simulator, do_1q_leaky_channel) {
         auto dat = OpDat("X", 0);
         sim.do_gate(dat);
         sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
-        sim.do_measurement(OpDat("M", 0));
+        sim.do_gate(OpDat("M", 0));
         ASSERT_TRUE(sim.leakage_masks_record[0] == 0 || sim.leakage_masks_record[0] == 1);
         auto result = sim.current_measurement_record();
         ASSERT_TRUE(result[0] == 0 || result[0] == 2);
@@ -99,7 +99,7 @@ TEST(simulator, readout_strategy) {
     auto dat = OpDat("X", 0);
     sim.do_gate(dat);
     sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
-    sim.do_measurement(OpDat("M", 0));
+    sim.do_gate(OpDat("M", 0));
     ASSERT_EQ(sim.current_measurement_record()[0], 3);
     ASSERT_EQ(sim.current_measurement_record(ReadoutStrategy::DeterministicLeakageProjection)[0], 1);
     auto random_result = sim.current_measurement_record(ReadoutStrategy::RandomLeakageProjection)[0];
@@ -113,7 +113,7 @@ TEST(simulator, do_2q_leaky_channel) {
     auto dat = OpDat("CZ", {0, 1});
     sim.do_gate(dat);
     sim.apply_2q_leaky_pauli_channel({dat.targets}, channel);
-    sim.do_measurement(OpDat("M", {0, 1}));
+    sim.do_gate(OpDat("M", {0, 1}));
     ASSERT_TRUE(sim.leakage_masks_record[0] == 0);
     ASSERT_TRUE(sim.leakage_masks_record[1] == 1);
     auto result = sim.current_measurement_record();
@@ -133,7 +133,7 @@ TEST(simulator, leaked_qubit_trans_down) {
         sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
         sim.do_gate(dat);
         sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
-        sim.do_measurement(OpDat("M", 0));
+        sim.do_gate(OpDat("M", 0));
         counts[sim.current_measurement_record()[0]]++;
         sim.clear();
     }
@@ -151,7 +151,7 @@ TEST(simulator, qubit_leaked_up) {
         sim.do_gate(OpDat("CNOT", {0, 1}));
         auto dat = OpDat("I", 1);
         sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
-        sim.do_measurement(OpDat("M", 0));
+        sim.do_gate(OpDat("M", 0));
         counts[sim.current_measurement_record()[0]]++;
         sim.clear();
     }
@@ -165,7 +165,7 @@ TEST(simulator, bind_leaky_channel) {
     channel.add_transition(0, 1, 0, 1);
     sim.bind_leaky_channel(OpDat("X", 0), channel);
     sim.do_gate(OpDat("X", 0));
-    sim.do_measurement(OpDat("M", 0));
+    sim.do_gate(OpDat("M", 0));
     ASSERT_TRUE(sim.leakage_masks_record[0] == 1);
     ASSERT_TRUE(sim.current_measurement_record()[0] == 2);
 }
@@ -179,7 +179,7 @@ TEST(simulator, repeated_leaky_ops) {
     sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
     sim.do_gate(dat);
     sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
-    sim.do_measurement(OpDat("M", 0));
+    sim.do_gate(OpDat("M", 0));
     ASSERT_TRUE(sim.leakage_masks_record[0] == 1);
     ASSERT_TRUE(sim.current_measurement_record()[0] == 2);
 }
@@ -188,7 +188,7 @@ TEST(simulator, multi_targets_ops) {
     Simulator sim(4);
     sim.do_gate(OpDat("R", {0, 1, 2, 3}));
     sim.do_gate(OpDat("X", {0, 1}));
-    sim.do_measurement(OpDat("M", {0, 1, 2, 3}));
+    sim.do_gate(OpDat("M", {0, 1, 2, 3}));
     ASSERT_EQ(sim.current_measurement_record(), std::vector<uint8_t>({1, 1, 0, 0}));
 
     sim.clear();
@@ -197,6 +197,6 @@ TEST(simulator, multi_targets_ops) {
     auto dat = OpDat("X", {0, 1});
     sim.do_gate(dat);
     sim.apply_1q_leaky_pauli_channel({dat.targets}, channel);
-    sim.do_measurement(OpDat("M", {0, 1}));
+    sim.do_gate(OpDat("M", {0, 1}));
     ASSERT_TRUE(sim.current_measurement_record() == std::vector<uint8_t>({1, 1}));
 }

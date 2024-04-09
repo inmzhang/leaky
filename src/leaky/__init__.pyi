@@ -1,4 +1,5 @@
 """Leaky: An implementation of Google's Pauli+ simulator based on `stim`."""
+
 # (This is a stubs file describing the classes and methods in leaky.)
 from __future__ import annotations
 
@@ -266,7 +267,11 @@ class Simulator:
         """Apply a circuit to the simulator.
 
         Args:
-            circuit: The `stim.Circuit` to apply.
+            circuit: The `stim.Circuit` to apply. Note that this method should
+                only be used for small-shots simulations. Since the simulator
+                look up the bound channels for each instruction, it is not
+                efficient for large repeated simulations. For large repeated
+                simulations, it is recommended to use the `sample_batch` method.
 
         Examples:
             >>> import stim
@@ -279,11 +284,17 @@ class Simulator:
         """
         ...
 
-    def do(self, instruction: "leaky.Instruction") -> None:
+    def do(
+        self,
+        instruction: "leaky.Instruction",
+        loop_up_bound_channels: bool = True,
+    ) -> None:
         """Apply an instruction to the simulator.
 
         Args:
             instruction: The `leaky.Instruction` to apply.
+            loop_up_bound_channels: Whether to look up and apply the bound channels
+                when applying the instruction. Default is True.
 
         Examples:
             >>> import leaky
