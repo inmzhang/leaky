@@ -54,6 +54,8 @@ py::class_<leaky::Simulator> leaky_pybind::pybind_simulator(py::module &m) {
 leaky::Simulator create_simulator(uint32_t num_qubits, const pybind11::object &seed) {
     if (!seed.is_none()) {
         leaky::set_seed(seed.cast<unsigned>());
+    } else {
+        leaky::randomize();
     }
     return leaky::Simulator(num_qubits);
 }
