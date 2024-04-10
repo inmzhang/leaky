@@ -42,8 +42,6 @@ jobs:
       matrix:
         os_dist: [
           # macosx x86_64
-          # {os: macos-latest, dist: cp36-macosx_x86_64},
-          {os: macos-latest, dist: cp37-macosx_x86_64},
           {os: macos-latest, dist: cp38-macosx_x86_64},
           {os: macos-latest, dist: cp39-macosx_x86_64},
           {os: macos-latest, dist: cp310-macosx_x86_64},
@@ -57,16 +55,12 @@ jobs:
           {os: macos-latest, dist: cp312-macosx_arm64},
 
           # windows amd64
-          # {os: windows-latest, dist: cp36-win_amd64},
-          {os: windows-latest, dist: cp37-win_amd64},
           {os: windows-latest, dist: cp38-win_amd64},
           {os: windows-latest, dist: cp39-win_amd64},
           {os: windows-latest, dist: cp310-win_amd64},
           {os: windows-latest, dist: cp311-win_amd64},
           {os: windows-latest, dist: cp312-win_amd64},
           # ubuntu x86_64
-          # {os: ubuntu-latest, dist: cp36-manylinux_x86_64},
-          {os: ubuntu-latest, dist: cp37-manylinux_x86_64},
           {os: ubuntu-latest, dist: cp38-manylinux_x86_64},
           {os: ubuntu-latest, dist: cp39-manylinux_x86_64},
           {os: ubuntu-latest, dist: cp310-manylinux_x86_64},
