@@ -71,8 +71,10 @@ void leaky::LeakyPauliChannel::add_transition(
         transitions[idx].emplace_back(std::make_pair(final_status, pauli_channel_idx));
         auto &probs = cumulative_probs[idx];
         auto cum_prob = probs.back() + probability;
-        if (cum_prob - 1.0 > 1e-9) {
-            throw std::runtime_error("sum of probabilities for each initial status should not exceed 1!");
+        if (cum_prob - 1.0 > 1e-6) {
+            std::string error_msg =
+                "sum of probabilities for each initial status should not exceed 1, but get " + std::to_string(cum_prob);
+            throw std::runtime_error(error_msg);
         }
         probs.push_back(cum_prob);
     } else {

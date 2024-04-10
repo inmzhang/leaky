@@ -202,7 +202,7 @@ class LeakyPauliChannel:
         ...
 
 class Instruction:
-    """An instruction almost the same as `stim.CircuitInstruction`.
+    """An instruction almost the same as `leaky.Instruction`.
 
     This is a simplified re-implemented since `stim.PyCircuitInstruction` is not exposed
     by `libstim` C++ API.
@@ -277,8 +277,8 @@ class Simulator:
             >>> import stim
             >>> import leaky
             >>> circuit = stim.Circuit()
-            >>> circuit.append_operation(stim.CircuitInstruction("X", [0]))
-            >>> circuit.append_operation(stim.CircuitInstruction("M", [0]))
+            >>> circuit.append_operation(leaky.Instruction("X", [0]))
+            >>> circuit.append_operation(leaky.Instruction("M", [0]))
             >>> simulator = leaky.Simulator(1)
             >>> simulator.do_circuit(circuit)
         """
@@ -385,7 +385,7 @@ class Simulator:
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do(stim.CircuitInstruction("X", [0]))
+            >>> simulator.do(leaky.Instruction("X", [0]))
             >>> simulator.clear()
         """
         ...
@@ -405,7 +405,7 @@ class Simulator:
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do(stim.CircuitInstruction("M", [0]))
+            >>> simulator.do(leaky.Instruction("M", [0]))
             >>> simulator.current_measurement_record()
             array([0], dtype=uint8)
         """

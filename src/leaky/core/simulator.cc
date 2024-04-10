@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <iostream>
 #include <random>
 #include <string>
 #include <utility>
@@ -22,27 +23,29 @@ leaky::Simulator::Simulator(uint32_t num_qubits)
       bound_leaky_channels({}) {
 }
 
-void leaky::Simulator::handle_u_or_d(
-    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target) {
-    auto transition_type = leaky::get_transition_type(cur_status, next_status);
-    const auto args = std::vector<double>{0.5};
-    const stim::CircuitInstruction x_error = {GateType::X_ERROR, args, target};
-    const stim::CircuitInstruction reset = {GateType::R, {}, target};
-
-    if (transition_type == leaky::TransitionType::U) {
-        tableau_simulator.do_X_ERROR(x_error);
-        tableau_simulator.do_RZ(reset);
-    } else if (transition_type == leaky::TransitionType::D) {
-        tableau_simulator.do_RZ(reset);
-        tableau_simulator.do_X_ERROR(x_error);
+void leaky::Simulator::handle_transition(
+    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, const char* pauli) {
+    switch (leaky::get_transition_type(cur_status, next_status)) {
+        case leaky::TransitionType::R:
+            tableau_simulator.do_gate({stim::GATE_DATA.at(pauli, 1).id, {}, target});
+            return;
+        case leaky::TransitionType::L:
+            return;
+        case leaky::TransitionType::U:
+            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target});
+            // tableau_simulator.do_RZ({GateType::R, {}, target});
+            return;
+        case leaky::TransitionType::D:
+            tableau_simulator.do_RZ({GateType::R, {}, target});
+            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target});
+            return;
     }
 }
 
 void leaky::Simulator::bind_leaky_channel(
     const stim::CircuitInstruction& ideal_inst, const LeakyPauliChannel& channel) {
     size_t inst_id = std::hash<std::string>{}(ideal_inst.str());
-    auto flags = stim::GATE_DATA[ideal_inst.gate_type].flags;
-    if (!(flags & stim::GATE_IS_UNITARY)) {
+    if (!(stim::GATE_DATA[ideal_inst.gate_type].flags & stim::GATE_IS_UNITARY)) {
         throw std::invalid_argument("Only unitary gates can be binded with a leaky channel.");
     }
     bound_leaky_channels.insert({inst_id, channel});
@@ -60,9 +63,8 @@ void leaky::Simulator::apply_1q_leaky_pauli_channel(
         }
         auto [next_status, pauli_channel_idx] = sample.value();
         leakage_status[qubit] = next_status;
-        handle_u_or_d(cur_status, next_status, target);
         auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, true);
-        tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_str).id, {}, target});
+        handle_transition(cur_status, next_status, target, pauli_str.c_str());
     }
 }
 
@@ -71,7 +73,6 @@ void leaky::Simulator::apply_2q_leaky_pauli_channel(
     for (size_t k = 0; k < targets.size(); k += 2) {
         auto t1 = targets.sub(k, k + 1);
         auto t2 = targets.sub(k + 1, k + 2);
-        auto pair = targets.sub(k, k + 2);
         auto q1 = targets[k].data;
         auto q2 = targets[k + 1].data;
         auto cs1 = leakage_status[q1];
@@ -86,12 +87,9 @@ void leaky::Simulator::apply_2q_leaky_pauli_channel(
         uint8_t ns2 = next_status & 0x0F;
         leakage_status[q1] = ns1;
         leakage_status[q2] = ns2;
-        handle_u_or_d(cs1, ns1, t1);
-        handle_u_or_d(cs2, ns2, t2);
-
         auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, false);
-        tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_str.c_str(), 1).id, {}, t1});
-        tableau_simulator.do_gate({stim::GATE_DATA.at(&pauli_str.c_str()[1], 1).id, {}, t2});
+        handle_transition(cs1, ns1, t1, pauli_str.c_str());
+        handle_transition(cs2, ns2, t2, &pauli_str.c_str()[1]);
     }
 }
 
@@ -116,7 +114,12 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst, bool look_u
             leakage_status[q.qubit_value()] = 0;
         }
     }
-    if (flags & stim::GATE_PRODUCES_RESULTS || flags & stim::GATE_IS_RESET) {
+    if ((flags & stim::GATE_PRODUCES_RESULTS) || (flags & stim::GATE_IS_RESET)) {
+        tableau_simulator.do_gate(inst);
+        return;
+    }
+    // Do noisy channels
+    if (flags & stim::GATE_IS_NOISY) {
         tableau_simulator.do_gate(inst);
         return;
     }
@@ -134,7 +137,7 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst, bool look_u
         if (all_target_is_in_r) {
             tableau_simulator.do_gate(split_inst);
         }
-        if (!look_up_bound_channels) {
+        if (!look_up_bound_channels || bound_leaky_channels.empty()) {
             continue;
         }
         // Look up the bound leaky channel for the ideal gate.
