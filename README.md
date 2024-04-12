@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/inmzhang/leaky/actions/workflows/ci.yml/badge.svg)](https://github.com/inmzhang/leaky/actions/workflows/ci.yml)
 
-> WARNING: This is a work in progress and is not yet ready for use, there will be breaking changes.
+> WARNING: This is a work in progress and there will be no gaurentee of backward compatibility until the first stable release.
 
 An implementation of Google's Pauli+ simulator. It uses `stim.TableauSimulator` internally for stabilizer
 simulation and adds support for leakage errors.
