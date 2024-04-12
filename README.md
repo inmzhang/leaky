@@ -27,16 +27,33 @@ pip install .
 
 ```python
 import leaky
+import stim
 
-channel = leaky.LeakyPauliChannel()
-channel.add_transition(
-    initial_status=0, # Computational space
-    final_status=1, # |2> leakage status
-    pauli_channel_idx=0,
-    probability=1.0,
+# Assume you have a unitary repr of CNOT noise from dynamical simulation
+# which is a 2**4 * 2**4 matrix, incoorporating leakage errors up to 4-th level
+cnot_kraus = np.load('cnot_kraus.npy')
+
+# Decompose the Kraus operator into pauli channels and incoherent stochastic transitions
+# with Generalize Pauli decomposition
+cnot_channel: leaky.LeakyPauliChannel = leaky.decompose_kraus_operators_to_leaky_pauli_channel(
+    kraus_operators = cnot_kraus,
+    num_qubits = 2,
+    num_level = 4,
 )
-simulator = leaky.Simulator(num_qubits=1)
-simulator.do_1q_leaky_pauli_channel(leaky.Instruction('X', [0]), channel)
-simulator.do(leaky.Instruction('M', [0]))
-assert simulator.current_measurement_record() == [2]
+
+# Simulate a bell state preparation circuit
+circuit = stim.Circuit("""R 0 1 2 3
+H 0 2
+CNOT 0 1 2 3
+M 0 1 2 3""")
+
+# Initialize a leaky simulator
+simulator = leaky.Simulator(num_qubits=circuit.num_qubits)
+
+# Bind the channel to the corresponding cz gates
+# We only bind the channel to a single cz gate for demonstration
+simulator.bind_leaky_channels(leaky.Instruction('CX', [0, 1]))
+
+# Sample the circuit
+results = simulator.sample_batch(circuit, shots=50000)
 ```
