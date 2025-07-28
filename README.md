@@ -26,6 +26,7 @@ pip install .
 ## Basic usage
 
 ```python
+import numpy as np
 import leaky
 import stim
 
@@ -50,9 +51,9 @@ M 0 1 2 3""")
 # Initialize a leaky simulator
 simulator = leaky.Simulator(num_qubits=circuit.num_qubits)
 
-# Bind the channel to the corresponding cz gates
-# We only bind the channel to a single cz gate for demonstration
-simulator.bind_leaky_channels(leaky.Instruction('CX', [0, 1]))
+# Bind the channel to the corresponding cx gates
+# We only bind the channel to a single cx gate for demonstration
+simulator.bind_leaky_channels(leaky.Instruction('CX', [0, 1]), cnot_kraus)
 
 # Sample the circuit
 results = simulator.sample_batch(circuit, shots=50000)
