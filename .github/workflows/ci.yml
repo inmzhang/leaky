@@ -26,7 +26,7 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: dists
+        name: dist-source
         path: dist/*.tar.gz
 
 
@@ -89,7 +89,7 @@ jobs:
     - name: Upload wheels
       uses: actions/upload-artifact@v4
       with:
-        name: dists
+        name: dist-${{ matrix.dist }}
         path: wheelhouse/*.whl
   gtest:
     runs-on: ${{ matrix.os }}
@@ -142,9 +142,9 @@ jobs:
       id-token: write
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: dists
+          name: dist-*
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
