@@ -34,7 +34,7 @@ ChannelResolvedCircuit resolve_bound_channels_in_circuit(
         size_t step = is_single_qubit_gate ? 1 : 2;
         for (size_t i = 0; i < targets.size(); i += step) {
             auto split_targets = targets.sub(i, i + step);
-            stim::CircuitInstruction split_inst = {gate_type, op.args, split_targets};
+            stim::CircuitInstruction split_inst = {gate_type, op.args, split_targets, {}};
             const auto inst_id = std::hash<std::string>{}(split_inst.str());
             auto it = simulator.bound_leaky_channels.find(inst_id);
             if (it == simulator.bound_leaky_channels.end()) {

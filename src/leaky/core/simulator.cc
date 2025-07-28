@@ -5,6 +5,7 @@
 #include <iostream>
 #include <random>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -24,20 +25,20 @@ leaky::Simulator::Simulator(uint32_t num_qubits)
 }
 
 void leaky::Simulator::handle_transition(
-    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, const char* pauli) {
+    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, std::string_view pauli) {
     switch (leaky::get_transition_type(cur_status, next_status)) {
         case leaky::TransitionType::R:
-            tableau_simulator.do_gate({stim::GATE_DATA.at(pauli, 1).id, {}, target});
+            tableau_simulator.do_gate({stim::GATE_DATA.at(pauli).id, {}, target, {}});
             return;
         case leaky::TransitionType::L:
             return;
         case leaky::TransitionType::U:
-            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target});
+            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
             // tableau_simulator.do_RZ({GateType::R, {}, target});
             return;
         case leaky::TransitionType::D:
-            tableau_simulator.do_RZ({GateType::R, {}, target});
-            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target});
+            tableau_simulator.do_RZ({GateType::R, {}, target, {}});
+            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
             return;
     }
 }
@@ -88,8 +89,8 @@ void leaky::Simulator::apply_2q_leaky_pauli_channel(
         leakage_status[q1] = ns1;
         leakage_status[q2] = ns2;
         auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, false);
-        handle_transition(cs1, ns1, t1, pauli_str.c_str());
-        handle_transition(cs2, ns2, t2, &pauli_str.c_str()[1]);
+        handle_transition(cs1, ns1, t1, pauli_str.substr(0, 1));
+        handle_transition(cs2, ns2, t2, pauli_str.substr(1, 1));
     }
 }
 
@@ -128,7 +129,7 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst, bool look_u
     size_t step = is_single_qubit_gate ? 1 : 2;
     for (size_t i = 0; i < targets.size(); i += step) {
         auto split_targets = targets.sub(i, i + step);
-        stim::CircuitInstruction split_inst = {gate_type, inst.args, split_targets};
+        stim::CircuitInstruction split_inst = {gate_type, inst.args, split_targets, {}};
         // If all qubits are in the R state, we can apply the ideal gate.
         bool all_target_is_in_r =
             is_single_qubit_gate

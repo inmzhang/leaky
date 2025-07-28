@@ -31,7 +31,7 @@ FetchContent_MakeAvailable(googletest)
 
 FetchContent_Declare(stim
         GIT_REPOSITORY https://github.com/quantumlib/stim.git
-        GIT_TAG b01e42391583d03db4266b387d907eda1d7ae488
+        GIT_TAG 42e0b9e099180e8570407c33f87b4683cac00d81
 )
 FetchContent_MakeAvailable(stim)
 if (NOT (MSVC))

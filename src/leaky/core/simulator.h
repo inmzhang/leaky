@@ -32,7 +32,7 @@ struct Simulator {
 
    private:
     void handle_transition(
-        uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, const char* pauli);
+        uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, std::string_view pauli);
 };
 
 }  // namespace leaky

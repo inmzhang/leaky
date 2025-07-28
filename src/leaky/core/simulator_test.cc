@@ -22,7 +22,7 @@ struct OpDat {
     OpDat(const char* gate, std::vector<uint32_t> u) : gate(stim::GATE_DATA.at(gate).id), targets(qubit_targets(u)) {
     }
     operator stim::CircuitInstruction() const {
-        return {gate, {}, targets};
+        return {gate, {}, targets, {}};
     }
 };
 

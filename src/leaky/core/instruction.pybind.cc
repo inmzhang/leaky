@@ -31,11 +31,7 @@ leaky_pybind::LeakyInstruction::LeakyInstruction(
 }
 
 stim::CircuitInstruction leaky_pybind::LeakyInstruction::as_operation_ref() const {
-    return stim::CircuitInstruction{
-        gate_type,
-        gate_args,
-        targets,
-    };
+    return stim::CircuitInstruction{gate_type, gate_args, targets, {}};
 }
 leaky_pybind::LeakyInstruction::operator stim::CircuitInstruction() const {
     return as_operation_ref();
