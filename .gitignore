@@ -12,3 +12,5 @@ build
 .idea
 cmake-build-*
 *.so
+out
+compile_commands.json
