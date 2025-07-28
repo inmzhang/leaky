@@ -89,7 +89,7 @@ jobs:
     - name: Upload wheels
       uses: actions/upload-artifact@v4
       with:
-        name: dist-${{ matrix.dist }}
+        name: dist-${{ matrix.os_dist.dist }}
         path: wheelhouse/*.whl
   gtest:
     runs-on: ${{ matrix.os }}
