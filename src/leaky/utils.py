@@ -1,32 +1,26 @@
 """Utilities for the leaky module."""
+
 from typing import List, Sequence, Tuple
 import itertools
 import functools
 
 import numpy as np
 
-from leaky import LeakyPauliChannel
+from leaky import LeakyPauliChannel, LeakageStatus
+
+TupleStatus = Tuple[int, ...]
+ProjectStatus = Tuple[Tuple[int, ...], ...]
 
 
-LeakageStatus = Tuple[int, ...]
-ProjectStatus = Tuple[Tuple[int], ...]
+PAULIS = [
+    ("I", np.array([[1, 0], [0, 1]], dtype=complex)),
+    ("X", np.array([[0, 1], [1, 0]], dtype=complex)),
+    ("Y", np.array([[0, -1j], [1j, 0]], dtype=complex)),
+    ("Z", np.array([[1, 0], [0, -1]], dtype=complex)),
+]
 
 
-PAULIS = np.array(
-    [
-        np.array([[1, 0], [0, 1]], dtype=complex),
-        np.array([[0, 1], [1, 0]], dtype=complex),
-        np.array([[0, -1j], [1j, 0]], dtype=complex),
-        np.array([[1, 0], [0, -1]], dtype=complex),
-    ]
-)
-
-TWO_QUBITS_PAULIS = np.array(
-    [np.kron(p1, p2) for p1, p2 in itertools.product(PAULIS, repeat=2)]
-)
-
-
-def decompose_kraus_operators_to_leaky_pauli_channel(
+def decompose_kraus_operators_to_leaky_channel(
     kraus_operators: Sequence[np.ndarray],
     num_qubits: int,
     num_level: int,
@@ -37,7 +31,7 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
 
     Args:
         kraus_operators: A sequence of Kraus operators corresponding to an operation's error channel.
-        num_qubits: The number of qubits in the operation.
+        num_qubits: The number of qubits the operation affects.
         num_level: The number of levels of the quantum system to be considered.
         safety_check: If True, perform a safety check to ensure the channel is valid.
             A channel is valid if the sum of the probabilities of all transitions
@@ -46,11 +40,9 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
             should always be I. Default is True.
 
     Returns:
-        A LeakyPauliChannel object representing the error channel.
+        A `LeakyPauliChannel` object representing the error channel.
     """
-    if num_qubits not in [1, 2]:
-        raise ValueError("Only 1 or 2 qubits operators are supported.")
-    channel = LeakyPauliChannel(is_single_qubit_channel=num_qubits == 1)
+    channel = LeakyPauliChannel(num_qubits)
 
     all_status = list(itertools.product(range(num_level - 1), repeat=num_qubits))
     for kraus in kraus_operators:
@@ -72,46 +64,41 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
                     kraus, num_qubits, num_level, initial_projector, final_projector
                 )
                 probability: float
-                pauli_channel: List[Tuple[int, float]] = []
+                pauli_channel: List[Tuple[str, float]] = []
                 if num_r == 0:
                     assert projected_kraus.shape == (1, 1)
                     probability = (
                         prefactor * np.abs(projected_kraus).astype(float) ** 2
                     ).item()
-                    pauli_channel.append((0, probability))
+                    pauli_channel.append(("I" * num_qubits, probability))
                 else:
                     dim = 2**num_r
                     assert projected_kraus.shape == (dim, dim)
-                    for i, paulis in enumerate(itertools.product(PAULIS, repeat=num_r)):
+                    for paulis in itertools.product(PAULIS, repeat=num_r):
+                        pauli_strs = "".join([p[0] for p in paulis])
                         probability = (
                             prefactor
                             * np.abs(
                                 np.trace(
-                                    projected_kraus @ functools.reduce(np.kron, paulis)
+                                    projected_kraus
+                                    @ functools.reduce(np.kron, [p[1] for p in paulis])
                                 )
                                 / dim
                             )
                             ** 2
                         )
-                        idx = sum(
-                            [
-                                ((i >> (2 * (num_r - j - 1))) & 0b11)
-                                << (2 * (num_qubits - q - 1))
-                                for j, q in enumerate(q_in_r)
-                            ]
-                        )
-                        pauli_channel.append((idx, probability))
+                        pauli_channel.append((pauli_strs, probability))
 
                     probability = sum([p for _, p in pauli_channel])
                 if probability < 1e-9:
                     continue
-                for idx, p in pauli_channel:
+                for pauli_str, p in pauli_channel:
                     if p < 1e-9:
                         continue
                     channel.add_transition(
-                        leakage_status_tuple_to_int(initial_status),
-                        leakage_status_tuple_to_int(final_status),
-                        idx,
+                        _t2s(initial_status),
+                        _t2s(final_status),
+                        pauli_str,
                         p,
                     )
     if safety_check:
@@ -119,20 +106,14 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
     return channel
 
 
-def leakage_status_tuple_to_int(status: LeakageStatus) -> int:
-    """Convert a leakage status tuple to an integer representation.
-
-    Args:
-        status: A tuple of leakage status. Currently, only support up to two
-            qubits.
-
-    Returns:
-        An integer representation of the leakage status.
-    """
-    return sum([s << (4 * (len(status) - i - 1)) for i, s in enumerate(status)])
+def _t2s(status: TupleStatus) -> LeakageStatus:
+    s = LeakageStatus(len(status))
+    for i, s_i in enumerate(status):
+        s.set(i, s_i)
+    return s
 
 
-def _l2p(leakage_status: LeakageStatus) -> ProjectStatus:
+def _l2p(leakage_status: TupleStatus) -> ProjectStatus:
     return tuple((0, 1) if s == 0 else (s + 1,) for s in leakage_status)
 
 
@@ -163,7 +144,7 @@ def _project_kraus_with_initial_final(
 
 
 def _scatter_status(
-    initial: LeakageStatus, final: LeakageStatus
+    initial: TupleStatus, final: TupleStatus
 ) -> List[Tuple[ProjectStatus, ProjectStatus]]:
     initial_project_status = _l2p(initial)
     final_project_status = _l2p(final)

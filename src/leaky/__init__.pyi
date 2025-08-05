@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Iterable, Sequence, Tuple, Optional, TYPE_CHECKING, Union
+from typing import Iterable, Iterator, Sequence, Tuple, Optional, TYPE_CHECKING, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -56,99 +56,278 @@ def rand_float(begin: float, end: float) -> float:
     """
     ...
 
-class LeakyPauliChannel:
-    """A generalized Pauli channel incorporating incoherent leakage transitions."""
-    def __init__(self, is_single_qubit_channel: bool = True) -> None:
-        """Initialize a `leaky.LeakyPauliChannel`.
+class LeakageStatus:
+    """A vector container that holds the leakage status of a list of qubits.
+
+    The integer 0 represents the computational space, and the integers greater than 0
+    represent the leakage space.
+    """
+    def __init__(self, num_qubits: int) -> None:
+        """Initialize a `leaky.LeakageStatus`.
 
         Args:
-            is_single_qubit_channel: Whether the channel is single-qubit or two-qubit.
+            num_qubits: The number of qubits this status holds.
 
         Examples:
             >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+        """
+        ...
+
+    @property
+    def num_qubits(self) -> int:
+        """The number of qubits this status holds."""
+        ...
+
+    def set(self, qubit: int, status: int) -> None:
+        """Set the leakage status of a qubit.
+
+        Args:
+            qubit: The index of the qubit to set.
+            status: The leakage status to set for the qubit.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+        """
+        ...
+
+    def reset(self, qubit: int) -> None:
+        """Reset the leakage status of a qubit to the computational space.
+
+        Args:
+            qubit: The index of the qubit to reset.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> status.reset(0)
+        """
+        ...
+
+    def get(self, qubit: int) -> int:
+        """Get the leakage status of a qubit.
+
+        Args:
+            qubit: The index of the qubit to get the status of.
+
+        Returns:
+            The leakage status of the qubit.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> status.get(0)
+            1
+        """
+        ...
+
+    def clear(self) -> None:
+        """Clear the leakage status of all qubits, resetting them to the computational space.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> status.clear()
+            >>> status.get(0)
+            0
+        """
+        ...
+
+    def is_leaked(self, qubit: int) -> bool:
+        """Check if a qubit is in the leakage space.
+
+        Args:
+            qubit: The index of the qubit to check.
+
+        Returns:
+            True if the qubit is in the leakage space, False otherwise.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> status.is_leaked(0)
+            True
+            >>> status.is_leaked(1)
+            False
+        """
+        ...
+
+    def any_leaked(self) -> bool:
+        """Check if any qubit is in the leakage space.
+
+        Returns:
+            True if any qubit is in the leakage space, False otherwise.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> status.any_leaked()
+            True
+            >>> status.clear()
+            >>> status.any_leaked()
+            False
+        """
+        ...
+
+    def __str__(self) -> str:
+        """Get a string representation of the leakage status.
+
+        Returns:
+            A string representation of the leakage status.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> str(status)
+            '|C⟩|2⟩'
+        """
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        """Check if two leakage statuses are equal.
+
+        Args:
+            other: The other leakage status to compare with.
+
+        Returns:
+            True if the two statuses are equal, False otherwise.
+
+        Examples:
+            >>> import leaky
+            >>> status1 = leaky.LeakageStatus(num_qubits=2)
+            >>> status2 = leaky.LeakageStatus(num_qubits=2)
+            >>> status1.set(0, 1)
+            >>> status1 == status2
+            False
+            >>> status2.set(0, 1)
+            >>> status1 == status2
+            True
+        """
+        ...
+
+    def __len__(self) -> int:
+        """Get the number of qubits in the leakage status.
+
+        Returns:
+            The number of qubits in the leakage status.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> len(status)
+            2
+        """
+        ...
+
+    def __iter__(self) -> Iterator[int]:
+        """Iterate over the leakage status of each qubit.
+
+        Returns:
+            An iterable of the leakage status of each qubit.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> list(status)
+            [1, 0]
+        """
+        ...
+
+class Transition:
+    """Transition into a leakage status with a associated pauli operator."""
+    @property
+    def to_status(self) -> LeakageStatus:
+        """The leakage status this transition ends to."""
+        ...
+
+    @property
+    def pauli_operator(self) -> str:
+        """The Pauli operator associated with this transition."""
+        ...
+
+class LeakyPauliChannel:
+    """A generalized Pauli channel incorporating incoherent leakage transitions."""
+    def __init__(self, num_qubits: int) -> None:
+        """Initialize a `leaky.LeakyPauliChannel`.
+
+        Args:
+            num_qubits: The number of qubits this channel acts on.
+
+        Examples:
+            >>> import leaky
+            >>> channel = leaky.LeakyPauliChannel(num_qubits=2)
         """
         ...
 
     @property
     def num_transitions(self) -> int:
-        """The number of transitions in the channel."""
+        """The number of different types of transitions in the channel."""
         ...
 
     def add_transition(
         self,
-        initial_status: int,
-        final_status: int,
-        pauli_channel_idx: int,
+        from_status: LeakageStatus,
+        to_status: LeakageStatus,
+        pauli_operator: str,
         probability: float,
     ) -> None:
         """Add a transition to the channel.
 
         Args:
-            initial_status: The initial status of the qubit(s). If the channel is
-            single-qubit,
-                this is a single status represented by a uint8. If the channel is two-qubit,
-                this is a pair of status, which is a uint8 concatenated by two 4-bit status.
-            final_status: The final status of the qubit(s). If the channel is single-qubit,
-                this is a single status represented by a uint8. If the channel is two-qubit,
-                this is a pair of status, which is a uint8 concatenated by two 4-bit status.
-            pauli_channel_idx: The index of the Pauli channel. For single qubit channels, this
-                is the index of the Pauli in the order [I, X, Y, Z]. For two-qubit channels, this
-                is the index of the Pauli in the order [II, IX, IY, IZ, XI, XX, XY, XZ, YI, YX, YY,
-                YZ, ZI, ZX, ZY, ZZ].
+            from_status: The leakage status of the transition starting from.
+            to_status: The leakage status of the transition ending to.
+            pauli_operator: A string representing the Pauli operator associated
+                with the transition.
             probability: The probability of the transition.
 
         Examples:
             >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> print(channel)
-            Transitions:
-                |C> --I--> |2>: 0.5,
+            >>> channel = leaky.LeakyPauliChannel(2)
         """
         ...
 
     def get_prob_from_to(
-        self, initial_status: int, final_status: int, pauli_idx: int
+        self, from_status: LeakageStatus, to_status: LeakageStatus, pauli_operator: str
     ) -> float:
         """Get the transition probability from an initial status to a final status with the
-        specified pauli channel index.
+        specified pauli operator.
 
         Args:
-            initial_status: The initial status of the qubit(s).
-            final_status: The final status of the qubit(s).
-            pauli_idx: The index of the Pauli channel.
+            from_status: The leakage status the transition starts from.
+            to_status: The leakage status the transition ends to.
+            pauli_operator: The Pauli operator associated with the transition.
 
         Returns:
             The probability of the transition.
 
         Examples:
             >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> channel.get_transitions_from_to(0, 1, 0)
-            0.5
-            >>> channel.get_transitions_from_to(0, 1, 1)
-            0.0
+            >>> channel = leaky.LeakyPauliChannel(2)
         """
         ...
 
-    def sample(self, initial_status: int) -> Optional[Tuple[int, int]]:
+    def sample(self, initial_status: LeakageStatus) -> Optional[Transition]:
         """Sample a transition from an initial status.
 
         Args:
             initial_status: The initial status of the qubit(s).
 
         Returns:
-            A transition which is a tuple of (final_status, pauli_channel_idx).
+            A `Transition` object representing the sampled transition or None if
+            no transition is available from the initial status.
 
         Examples:
             >>> import leaky
             >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 0, 1, 0.5)
-            >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> channel.sample(0)
-            (1, 0)
         """
         ...
 
@@ -167,9 +346,6 @@ class LeakyPauliChannel:
         Examples:
             >>> import leaky
             >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> channel.safety_check()
-            RuntimeError: The sum of probabilities for each initial status should be 1
         """
         ...
 
@@ -179,75 +355,22 @@ class LeakyPauliChannel:
         Examples:
             >>> import leaky
             >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> channel.add_transition(0, 0, 1, 0.5)
-            >>> print(channel)
-            Transitions:
-                |C> --I--> |2>: 0.5,
-                |C> --X--> |C>: 0.5,
-        """
-        ...
-
-    def __repr__(self) -> str:
-        """The compact string representation of the channel.
-
-        Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 0.5)
-            >>> channel.add_transition(0, 0, 1, 0.5)
-            >>> channel
-            LeakyPauliChannel(is_single_qubit_channel=true, with 2 transitions attached)
-        """
-        ...
-
-class Instruction:
-    """An instruction almost the same as `leaky.Instruction`.
-
-    This is a simplified re-implemented since `stim.PyCircuitInstruction` is not exposed
-    by `libstim` C++ API.
-    """
-    def __init__(
-        self,
-        gate_name: str,
-        targets: Iterable[Union[int, stim.GateTarget]],
-        arg: Iterable[float] = (),
-    ) -> None:
-        """Initialize an `leaky.Instruction`.
-
-        Args:
-            name: The name of the operation's gate (e.g. "H" or "M" or "CNOT").
-            targets: The objects operated on by the gate. This isan iterable of multiple
-                targets to broadcast the gate over. Each target can be an integer (a qubit),
-                a stim.GateTarget, or a special target from one of the `stim.target_*`
-                methods (such as a measurement record target like `rec[-1]` from
-                `stim.target_rec(-1)`).
-            arg: The "parens arguments" for the gate, such as the probability for a
-                noise operation. A list of doubles parameterizing the gate. Different
-                gates take different parens arguments. For example, X_ERROR takes a
-                probability, OBSERVABLE_INCLUDE takes an observable index, and
-                PAULI_CHANNEL_1 takes three disjoint probabilities.
-
-        Examples:
-            >>> import leaky
-            >>> instruction1 = leaky.Instruction("X", [0])
-            >>> instruction2 = leaky.Instruction("CNOT", [0, 1])
-            >>> instruction3 = leaky.Instruction("DEPOLARIZE1", [0], [0.1])
         """
         ...
 
 class ReadoutStrategy(enum.Enum):
     """The strategy for readout simulating results."""
 
-    RawLabel: int
-    RandomLeakageProjection: int
-    DeterministicLeakageProjection: int
+    RawLabel = 0
+    RandomLeakageProjection = 1
+    DeterministicLeakageProjection = 2
 
 class Simulator:
     """A simulator for stabilizer quantum circuits with incoherent leakage transitions."""
     def __init__(
         self,
         num_qubits: int,
+        leaky_channels: list[LeakyPauliChannel] | None = None,
         *,
         seed: Optional[int] = None,
     ) -> None:
@@ -255,6 +378,12 @@ class Simulator:
 
         Args:
             num_qubits: The number of qubits in the simulator.
+            leaky_channels: A list of `leaky.LeakyPauliChannel` objects to bind
+                to the simulator. These channels will be applied to the simulator
+                when calling `do_gate` or `do_circuit` and there is a leaky
+                instruction which is in the form of `I[leaky<n>] q0 q1 ...` where
+                `leaky<n>` is the special leaky tag, `n` is the index of the
+                channel in the list.
             seed: The random seed to use for the simulator.
 
         Examples:
@@ -267,11 +396,11 @@ class Simulator:
         """Apply a circuit to the simulator.
 
         Args:
-            circuit: The `stim.Circuit` to apply. Note that this method should
-                only be used for small-shots simulations. Since the simulator
-                look up the bound channels for each instruction, it is not
-                efficient for large repeated simulations. For large repeated
-                simulations, it is recommended to use the `sample_batch` method.
+            circuit: The `stim.Circuit` to simulate. Incoherent leakage transitions
+                should be added to the circuit in the form of `I[leaky<n>] q0 q1 ...`
+                where `leaky<n>` is the special leaky tag, `n` is the index of
+                the channel in the list `leaky_channels` passed to the simulator
+                constructor.
 
         Examples:
             >>> import stim
@@ -284,108 +413,52 @@ class Simulator:
         """
         ...
 
-    def do(
+    def do_gate(
         self,
-        instruction: "leaky.Instruction",
-        loop_up_bound_channels: bool = True,
+        instruction: stim.CircuitInstruction,
     ) -> None:
         """Apply an instruction to the simulator.
 
         Args:
-            instruction: The `leaky.Instruction` to apply.
-            loop_up_bound_channels: Whether to look up and apply the bound channels
-                when applying the instruction. Default is True.
+            instruction: The stim circuit instruction to simulate.
 
         Examples:
             >>> import leaky
-            >>> instruction = leaky.Instruction("X", [0])
+            >>> instruction = stim.CircuitInstruction("X", [0])
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do(instruction)
+            >>> simulator.do_gate(instruction)
         """
         ...
 
-    def apply_1q_leaky_pauli_channel(
+    def apply_leaky_channel(
         self,
         targets: Iterable[Union[int, stim.GateTarget]],
         channel: "leaky.LeakyPauliChannel",
     ) -> None:
-        """Apply a single qubit leaky Pauli channel to a circuit instruction.
+        """Simulate a quantum channel with incoherent leakage transitions.
 
         Args:
-            targets: The objects operated on by the gate. This isan iterable of multiple
+            targets: The objects operated on by the gate. This is an iterable of multiple
                 targets to broadcast the gate over. Each target can be an integer (a qubit),
                 a stim.GateTarget, or a special target from one of the `stim.target_*`
                 methods (such as a measurement record target like `rec[-1]` from
-                `stim.target_rec(-1)`).
+                `stim.target_rec(-1)`). The targets will be grouped into groups
+                that have the same number of qubits as the channel expects.
             channel: The leaky channel to apply.
 
         Examples:
             >>> import leaky
             >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 1.0)
-            >>> simulator = leaky.Simulator(1)
-            >>> simulator.apply_1q_leaky_pauli_channel([0, 1], channel)
         """
         ...
 
-    def apply_2q_leaky_pauli_channel(
-        self,
-        targets: "leaky.Instruction",
-        channel: "leaky.LeakyPauliChannel",
-    ) -> None:
-        """Apply a two qubit leaky Pauli channel to a circuit instruction.
-
-        Args:
-            targets: The objects operated on by the gate. This isan iterable of multiple
-                targets to broadcast the gate over. Each target can be an integer (a qubit),
-                a stim.GateTarget, or a special target from one of the `stim.target_*`
-                methods (such as a measurement record target like `rec[-1]` from
-                `stim.target_rec(-1)`).
-            channel: The leaky channel to apply.
-
-        Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel(is_single_qubit_channel=False)
-            >>> channel.add_transition(0, 1, 0, 1.0)
-            >>> simulator = leaky.Simulator(2)
-            >>> simulator.do_2q_leaky_pauli_channel([0, 1, 2, 3], channel)
-        """
-        ...
-
-    def bind_leaky_channel(
-        self,
-        ideal_inst: "leaky.Instruction",
-        channel: "leaky.LeakyPauliChannel",
-    ) -> None:
-        """Bind a leaky channel to a circuit instruction.
-
-        A bound channel will be applied to the simulator whenever the bound
-        instruction is applied.
-
-        Args:
-            ideal_inst: The ideal circuit instruction to bind the channel to.
-            channel: The leaky channel to bind.
-
-        Examples:
-            >>> import leaky
-            >>> instruction = leaky.Instruction("X", [0])
-            >>> channel = leaky.LeakyPauliChannel()
-            >>> channel.add_transition(0, 1, 0, 1.0)
-            >>> simulator = leaky.Simulator(1)
-            >>> simulator.bind_leaky_channel(instruction, channel)
-        """
-        ...
-
-    def clear(self, clear_bound_channels: bool = False) -> None:
+    def clear(self) -> None:
         """Clear the simulator's state.
 
-        Args:
-            clear_bound_channels: Whether to also clear the bound leaky channels.
-
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do(leaky.Instruction("X", [0]))
+            >>> simulator.do(stim.CircuitInstruction("X", [0]))
             >>> simulator.clear()
         """
         ...
@@ -411,7 +484,7 @@ class Simulator:
         """
         ...
 
-    def sample_batch(
+    def sample(
         self,
         circuit: "stim.Circuit",
         shots: int,
@@ -427,6 +500,15 @@ class Simulator:
         Returns:
             A numpy array of measurement results with `dtype=uint8`. The shape of the array
             is `(shots, circuit.num_measurements)`.
+        """
+        ...
+
+    @property
+    def leaky_channels(self) -> list[LeakyPauliChannel]:
+        """Get the list of leaky channels bound to the simulator.
+
+        Returns:
+            A list of `leaky.LeakyPauliChannel` objects.
         """
         ...
 

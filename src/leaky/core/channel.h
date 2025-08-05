@@ -1,12 +1,15 @@
 #ifndef LEAKY_CHANNEL_H
 #define LEAKY_CHANNEL_H
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <sys/types.h>
-#include <utility>
 #include <vector>
+
+#include "leaky/core/status.h"
 
 namespace leaky {
 
@@ -17,26 +20,28 @@ enum TransitionType : uint8_t {
     L,
 };
 
-TransitionType get_transition_type(uint8_t initial_status, uint8_t final_status);
+TransitionType get_transition_type(uint8_t from, uint8_t to);
 
-std::string pauli_idx_to_string(uint8_t idx, bool is_single_qubit_channel);
+struct Transition {
+    LeakageStatus to_status;
+    std::string_view pauli_operator;
 
-typedef std::pair<uint8_t, uint8_t> transition;
+    explicit Transition(LeakageStatus to_status, std::string_view pauli_operator);
+};
 
 struct LeakyPauliChannel {
-    std::vector<uint8_t> initial_status_vec;
-    std::vector<std::vector<transition>> transitions;
+    std::vector<LeakageStatus> initial_status_vec;
+    std::vector<std::vector<Transition>> transitions;
     std::vector<std::vector<double>> cumulative_probs;
-    bool is_single_qubit_channel;
+    size_t num_qubits;
 
-    explicit LeakyPauliChannel(bool is_single_qubit_transition = true);
-    void add_transition(uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability);
-    [[nodiscard]] double get_prob_from_to(uint8_t initial_status, uint8_t final_status, uint8_t pauli_idx) const;
-    [[nodiscard]] uint8_t num_transitions() const;
-    [[nodiscard]] std::optional<transition> sample(uint8_t initial_status) const;
+    explicit LeakyPauliChannel(size_t num_qubits = 1);
+    void add_transition(LeakageStatus from, LeakageStatus to, std::string_view pauli_operator, double probability);
+    [[nodiscard]] double get_prob_from_to(LeakageStatus from, LeakageStatus to, std::string_view pauli_operator) const;
+    [[nodiscard]] size_t num_transitions() const;
+    [[nodiscard]] std::optional<Transition> sample(LeakageStatus initial_status) const;
     void safety_check() const;
     [[nodiscard]] std::string str() const;
-    [[nodiscard]] std::string repr() const;
 };
 
 }  // namespace leaky
