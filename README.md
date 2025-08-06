@@ -30,31 +30,35 @@ import numpy as np
 import leaky
 import stim
 
-# Assume you have a unitary repr of CNOT noise from dynamical simulation
-# which is a 2**4 * 2**4 matrix, incoorporating leakage errors up to 4-th level
-cnot_kraus = np.load('cnot_kraus.npy')
+# Quantum channel that can includes leakage transitions
+channel_2q = leaky.LeakyPauliChannel(2)
+# Qubits order is in least-significant bit order, the first qubit is the leftmost
+# state in the Dirac notation
+# leakage state 0 represents computational space, nth state represent n+1 leakage space
+s1, s2 = leaky.LeakageStatus(2), leaky.LeakageStatus(2)
+s2.set(1, 1) # the second qubit will leak into the first leakage space (|2⟩)
+channel_2q.add_transition(s1, s2, "XI", 1.0) # |C⟩|C⟩ -> |C⟩|2⟩ with associated Pauli operator X on the first qubit
+s = leaky.Simulator(4, [channel_2q])
 
-# Decompose the Kraus operator into pauli channels and incoherent stochastic transitions
-# with Generalize Pauli decomposition
-cnot_channel: leaky.LeakyPauliChannel = leaky.decompose_kraus_operators_to_leaky_pauli_channel(
-    kraus_operators = cnot_kraus,
-    num_qubits = 2,
-    num_level = 4,
-)
-
-# Simulate a bell state preparation circuit
-circuit = stim.Circuit("""R 0 1 2 3
-H 0 2
+# The leakage channel can be annotated in the circuit with a special tag `leaky<n>`
+# attached to the `I` instruction, where `n` represents the nth channel bound to the
+# simulator during initialization. The channel will be broadcast to the targets
+# of the `I` instruction based on the channel dimensions.
+circuit = stim.Circuit("""
+R 0 1 2 3
+X 0 2
 CNOT 0 1 2 3
-M 0 1 2 3""")
+I[leaky<0>] 0 1 2 3
+M 0 1 2 3
+""")
+s.do_circuit(circuit)
+assert len(s.leaky_channels) == 3
+assert s.current_measurement_record().tolist() == [0, 2, 0, 2]
 
-# Initialize a leaky simulator
-simulator = leaky.Simulator(num_qubits=circuit.num_qubits)
+# Another way to apply the leakage channel is by calling `apply_leaky_channel` method
+s.apply_leaky_channel([1, 2], channel_2q)
 
-# Bind the channel to the corresponding cx gates
-# We only bind the channel to a single cx gate for demonstration
-simulator.bind_leaky_channel(leaky.Instruction('CX', [0, 1]), cnot_channel)
-
-# Sample the circuit
-results = simulator.sample_batch(circuit, shots=50000)
+# A higher dimension leakage channel (`four_qubit_channel = LeakyPauliChannel(4)`) can be applied by either:
+# 1. include `I[leaky<n>] q0 q1 q2 q3` in the circuit and call `do_circuit`
+# 2. simulator.apply_leaky_channel([q0, q1, q2, q3], four_qubit_channel)
 ```

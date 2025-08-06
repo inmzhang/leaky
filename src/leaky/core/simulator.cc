@@ -35,6 +35,25 @@ std::optional<int> extract_leaky_channel_index(std::string_view tag) {
     throw std::invalid_argument("Invalid leaky channel tag: " + std::string(tag));
 }
 
+void leaky::Simulator::handle_transition(
+    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, std::string_view pauli) {
+    leakage_status.set(target[0].qubit_value(), next_status);
+    switch (leaky::get_transition_type(cur_status, next_status)) {
+        case leaky::TransitionType::R:
+            tableau_simulator.do_gate({stim::GATE_DATA.at(pauli).id, {}, target, {}});
+            return;
+        case leaky::TransitionType::L:
+            return;
+        case leaky::TransitionType::U:
+            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
+            // tableau_simulator.do_RZ({GateType::R, {}, target});
+            return;
+        case leaky::TransitionType::D:
+            tableau_simulator.do_RZ({GateType::R, {}, target, {}});
+            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
+            return;
+    }
+}
 leaky::Simulator::Simulator(uint32_t num_qubits, std::vector<LeakyPauliChannel> leaky_channels)
     : num_qubits(num_qubits),
       leakage_status(num_qubits),
@@ -52,36 +71,23 @@ void leaky::Simulator::apply_leaky_channel(
     }
     for (size_t k = 0; k < targets.size(); k += step) {
         LeakageStatus target_status(step);
-        for (size_t i = 0; i < step; i++) {
-            auto qubit = targets[i + k].data;
+        for (size_t i = 0; i < step; ++i) {
+            auto qubit = targets[i + k].qubit_value();
             target_status.set(i, leakage_status.get(qubit));
         }
         auto sample = channel.sample(target_status);
         if (!sample.has_value()) {
-            return;
+            throw std::invalid_argument(
+                "The initial status " + target_status.str() + " is not in the channel's initial status set.");
         }
-        const auto& trans = sample.value();
+        auto trans = sample.value();
         auto pauli_operator = trans.pauli_operator;
-        for (size_t i = 0; i < step; i++) {
+
+        for (size_t i = 0; i < step; ++i) {
             auto target = targets.sub(i + k, i + k + 1);
             uint8_t from = target_status.get(i);
             uint8_t to = trans.to_status.get(i);
-            leakage_status.set(targets[i + k].data, to);
-
-            switch (leaky::get_transition_type(from, to)) {
-                case leaky::TransitionType::R:
-                    tableau_simulator.do_gate({stim::GATE_DATA.at(pauli_operator.substr(i, i + 1)).id, {}, target, {}});
-                    return;
-                case leaky::TransitionType::L:
-                    return;
-                case leaky::TransitionType::U:
-                    tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
-                    return;
-                case leaky::TransitionType::D:
-                    tableau_simulator.do_RZ({GateType::R, {}, target, {}});
-                    tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
-                    return;
-            }
+            handle_transition(from, to, target, pauli_operator.substr(i, 1));
         }
     }
 }
@@ -178,6 +184,7 @@ std::vector<uint8_t> leaky::Simulator::current_measurement_record(ReadoutStrateg
 
 void leaky::Simulator::append_measurement_record_into(uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy) {
     auto tableau_record = tableau_simulator.measurement_record.storage;
+
     auto num_measurements = leakage_masks_record.size();
     if (readout_strategy == ReadoutStrategy::RawLabel) {
         for (auto i = 0; i < num_measurements; i++) {

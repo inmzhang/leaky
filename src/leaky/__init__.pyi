@@ -290,8 +290,9 @@ class LeakyPauliChannel:
             probability: The probability of the transition.
 
         Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel(2)
+            >>> from leaky import LeakyPauliChannel, LeakageStatus
+            >>> channel = LeakyPauliChannel(2)
+            >>> channel.add_transition(LeakageStatus(2), LeakageStatus(2), "XI", 1.0)
         """
         ...
 
@@ -310,8 +311,11 @@ class LeakyPauliChannel:
             The probability of the transition.
 
         Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel(2)
+            >>> from leaky import LeakyPauliChannel, LeakageStatus
+            >>> channel = LeakyPauliChannel(2)
+            >>> channel.add_transition(LeakageStatus(2), LeakageStatus(2), "XI", 1.0)
+            >>> channel.get_prob_from_to(LeakageStatus(2), LeakageStatus(2), "XI")
+            1.0
         """
         ...
 
@@ -326,8 +330,10 @@ class LeakyPauliChannel:
             no transition is available from the initial status.
 
         Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
+            >>> from leaky import LeakyPauliChannel, LeakageStatus
+            >>> channel = LeakyPauliChannel(2)
+            >>> channel.add_transition(LeakageStatus(2), LeakageStatus(2), "XI", 1.0)
+            >>> transition = channel.sample(LeakageStatus(2))
         """
         ...
 
@@ -345,25 +351,22 @@ class LeakyPauliChannel:
 
         Examples:
             >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
+            >>> channel = leaky.LeakyPauliChannel(2)
+            >>> channel.add_transition(LeakageStatus(2), LeakageStatus(2), "XI", 1.0)
+            >>> channel.safety_check()
         """
         ...
 
     def __str__(self) -> str:
-        """The readable string representation of the channel.
-
-        Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
-        """
+        """The readable string representation of the channel."""
         ...
 
 class ReadoutStrategy(enum.Enum):
     """The strategy for readout simulating results."""
 
-    RawLabel = 0
-    RandomLeakageProjection = 1
-    DeterministicLeakageProjection = 2
+    RawLabel = "RawLabel"
+    RandomLeakageProjection = "RandomLeakageProjection"
+    DeterministicLeakageProjection = "DeterministicLeakageProjection"
 
 class Simulator:
     """A simulator for stabilizer quantum circuits with incoherent leakage transitions."""
@@ -401,21 +404,15 @@ class Simulator:
                 where `leaky<n>` is the special leaky tag, `n` is the index of
                 the channel in the list `leaky_channels` passed to the simulator
                 constructor.
-
-        Examples:
-            >>> import stim
-            >>> import leaky
-            >>> circuit = stim.Circuit()
-            >>> circuit.append_operation(leaky.Instruction("X", [0]))
-            >>> circuit.append_operation(leaky.Instruction("M", [0]))
-            >>> simulator = leaky.Simulator(1)
-            >>> simulator.do_circuit(circuit)
         """
         ...
 
     def do_gate(
         self,
-        instruction: stim.CircuitInstruction,
+        name: str,
+        targets: Iterable[Union[int, stim.GateTarget]],
+        args: Iterable[float] = (),
+        tag: str = "",
     ) -> None:
         """Apply an instruction to the simulator.
 
@@ -424,9 +421,8 @@ class Simulator:
 
         Examples:
             >>> import leaky
-            >>> instruction = stim.CircuitInstruction("X", [0])
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do_gate(instruction)
+            >>> simulator.do_gate("H", [0])
         """
         ...
 
@@ -445,10 +441,6 @@ class Simulator:
                 `stim.target_rec(-1)`). The targets will be grouped into groups
                 that have the same number of qubits as the channel expects.
             channel: The leaky channel to apply.
-
-        Examples:
-            >>> import leaky
-            >>> channel = leaky.LeakyPauliChannel()
         """
         ...
 
@@ -458,7 +450,7 @@ class Simulator:
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do(stim.CircuitInstruction("X", [0]))
+            >>> simulator.do("X", [0])
             >>> simulator.clear()
         """
         ...
@@ -478,7 +470,7 @@ class Simulator:
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(1)
-            >>> simulator.do(leaky.Instruction("M", [0]))
+            >>> simulator.do_gate("M", [0])
             >>> simulator.current_measurement_record()
             array([0], dtype=uint8)
         """
@@ -512,38 +504,16 @@ class Simulator:
         """
         ...
 
-def decompose_kraus_operators_to_leaky_pauli_channel(
-    kraus_operators: Sequence[np.ndarray],
-    num_qubits: int,
-    num_level: int,
-    safety_check: bool = True,
-) -> LeakyPauliChannel:
-    """Decompose the Kraus operators into a leaky pauli channel representation with
-    Generalized Pauli Twirling(GPT).
+    @property
+    def leakage_status(self) -> "leaky.LeakageStatus":
+        """Get the current leakage status of the simulator.
 
-    Args:
-        kraus_operators: A sequence of Kraus operators corresponding to an operation's error channel.
-        num_qubits: The number of qubits in the operation.
-        num_level: The number of levels of the quantum system to be considered.
-        safety_check: If True, perform a safety check to ensure the channel is valid.
-            A channel is valid if the sum of the probabilities of all transitions
-            from a given initial status is 1. And the pauli channel related to the
-            qubits with transition type that not in R(stay in the computational space)
-            should always be I. Default is True.
+        Returns:
+            A `leaky.LeakageStatus` object representing the current leakage status.
+        """
+        ...
 
-    Returns:
-        A LeakyPauliChannel object representing the error channel.
-    """
-    ...
-
-def leakage_status_tuple_to_int(status: Tuple[int, ...]) -> int:
-    """Convert a leakage status tuple to an integer representation.
-
-    Args:
-        status: A tuple of leakage status. Currently, only support up to two
-            qubits.
-
-    Returns:
-        An integer representation of the leakage status.
-    """
-    ...
+    @property
+    def leakage_masks_record(self) -> list[int]:
+        """Get the leakage masks record of the simulator."""
+        ...

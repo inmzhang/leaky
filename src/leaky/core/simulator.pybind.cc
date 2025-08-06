@@ -11,30 +11,10 @@
 #include "leaky/core/channel.h"
 #include "leaky/core/rand_gen.h"
 #include "leaky/core/simulator.h"
-
-stim::GateTarget parse_py_gate_target(py::object py_obj) {
-    return stim::GateTarget::from_target_str(py::cast<std::string>(py_obj.attr("__str__")()));
-}
+#include "stim/circuit/circuit_instruction.h"
 
 stim::GateType parse_gate_type(std::string_view gate_name) {
     return stim::GATE_DATA.at(gate_name).id;
-}
-
-stim::CircuitInstruction parse_py_circuit_instruction(
-    py::object py_obj, std::vector<double> &args, std::vector<stim::GateTarget> &targets) {
-    for (auto t : py_obj.attr("gate_args_copy")())
-        args.push_back(t.cast<double>());
-    stim::SpanRef args_ref(args);
-
-    stim::SpanRef targets_ref(targets);
-    auto ty = parse_gate_type(py::cast<std::string>(py_obj.attr("name")));
-    std::string tag = py::cast<std::string>(py_obj.attr("tag"));
-
-    // TODO: FIX this
-    for (auto t : py_obj.attr("targets_copy")())
-        targets.push_back(parse_py_gate_target(t.cast<py::object>()));
-
-    return stim::CircuitInstruction(ty, args_ref, targets_ref, tag);
 }
 
 stim::GateTarget handle_to_gate_target(const pybind11::handle &obj) {
@@ -87,13 +67,22 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
         py::arg("circuit"));
     s.def(
         "do_gate",
-        [](leaky::Simulator &self, const py::object &instruction) {
-            std::vector<double> args;
-            std::vector<stim::GateTarget> targets;
-            auto circuit_inst = parse_py_circuit_instruction(instruction, args, targets);
+        [](leaky::Simulator &self,
+           std::string_view name,
+           const std::vector<pybind11::object> &target_objs,
+           const std::vector<double> &args = {},
+           std::string_view tag = "") {
+            auto targets = std::vector<stim::GateTarget>();
+            for (const auto &obj : target_objs) {
+                targets.push_back(handle_to_gate_target(obj));
+            }
+            stim::CircuitInstruction circuit_inst = {parse_gate_type(name), args, targets, tag};
             self.do_gate(circuit_inst);
         },
-        py::arg("instruction"));
+        py::arg("name"),
+        py::arg("targets"),
+        py::arg("args") = std::vector<double>{},
+        py::arg("tag") = "");
     s.def(
         "apply_leaky_channel",
         [](leaky::Simulator &self,
@@ -149,4 +138,6 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
         py::arg("shots"),
         py::arg("readout_strategy") = leaky::ReadoutStrategy::RawLabel);
     s.def_readonly("leaky_channels", &leaky::Simulator::leaky_channels);
+    s.def_readonly("leakage_status", &leaky::Simulator::leakage_status);
+    s.def_readonly("leakage_masks_record", &leaky::Simulator::leakage_masks_record);
 }
