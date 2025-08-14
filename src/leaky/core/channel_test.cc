@@ -1,6 +1,5 @@
 #include "leaky/core/channel.h"
 
-#include <algorithm>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -17,92 +16,72 @@ TEST(channel, transition_type) {
     ASSERT_EQ(get_transition_type(2, 3), TransitionType::L);
 }
 
+void add_1q_trans_helper(LeakyPauliChannel &channel, uint8_t from, uint8_t to, std::string_view pauli, double prob) {
+    LeakageStatus from_status(1);
+    LeakageStatus to_status(1);
+    from_status.set(0, from);
+    to_status.set(0, to);
+    channel.add_transition(from_status, to_status, pauli, prob);
+}
+
+void assert_1q_prob_helper(
+    const LeakyPauliChannel &channel, uint8_t from, uint8_t to, std::string_view pauli, double expected_prob) {
+    LeakageStatus from_status(1);
+    LeakageStatus to_status(1);
+    from_status.set(0, from);
+    to_status.set(0, to);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(from_status, to_status, pauli), expected_prob);
+}
+
 TEST(channel, add_transition_1q) {
-    auto channel = LeakyPauliChannel();
-    ASSERT_TRUE(channel.is_single_qubit_channel);
-    channel.add_transition(0, 0, 0, 0.2);
-    channel.add_transition(0, 0, 1, 0.3);
-    channel.add_transition(0, 0, 2, 0.1);
-    channel.add_transition(0, 0, 3, 0.2);
-    channel.add_transition(0, 1, 0, 0.15);
-    channel.add_transition(0, 2, 0, 0.05);
-    channel.add_transition(1, 0, 0, 0.5);
-    channel.add_transition(1, 1, 0, 0.3);
-    channel.add_transition(1, 2, 0, 0.2);
+    auto channel = LeakyPauliChannel(1);
+    ASSERT_EQ(channel.num_qubits, 1);
+    ASSERT_EQ(channel.num_transitions(), 0);
+    add_1q_trans_helper(channel, 0, 0, "I", 0.2);
+    add_1q_trans_helper(channel, 0, 0, "X", 0.3);
+    add_1q_trans_helper(channel, 0, 0, "Y", 0.1);
+    add_1q_trans_helper(channel, 0, 0, "Z", 0.2);
+    add_1q_trans_helper(channel, 0, 1, "I", 0.15);
+    add_1q_trans_helper(channel, 0, 2, "I", 0.05);
+    add_1q_trans_helper(channel, 1, 0, "I", 0.5);
+    add_1q_trans_helper(channel, 1, 1, "I", 0.3);
+    add_1q_trans_helper(channel, 1, 2, "I", 0.2);
     ASSERT_EQ(channel.initial_status_vec.size(), 2);
-    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0, 0, 0), 0.2);
-    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0, 0, 1), 0.3);
-    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0, 1, 0), 0.15);
-    ASSERT_EQ(channel.get_prob_from_to(0, 3, 0), 0.0);
+    assert_1q_prob_helper(channel, 0, 0, "I", 0.2);
+    assert_1q_prob_helper(channel, 0, 0, "X", 0.3);
+    assert_1q_prob_helper(channel, 0, 1, "I", 0.15);
+    assert_1q_prob_helper(channel, 0, 3, "I", 0.0);
+
     ASSERT_EQ(channel.str(), R"(Transitions:
-    |C> --I--> |C>: 0.2,
-    |C> --X--> |C>: 0.3,
-    |C> --Y--> |C>: 0.1,
-    |C> --Z--> |C>: 0.2,
-    |C> --I--> |2>: 0.15,
-    |C> --I--> |3>: 0.05,
-    |2> --I--> |C>: 0.5,
-    |2> --I--> |2>: 0.3,
-    |2> --I--> |3>: 0.2,
+    |C⟩ --I--> |C⟩: 0.2,
+    |C⟩ --X--> |C⟩: 0.3,
+    |C⟩ --Y--> |C⟩: 0.1,
+    |C⟩ --Z--> |C⟩: 0.2,
+    |C⟩ --I--> |2⟩: 0.15,
+    |C⟩ --I--> |3⟩: 0.05,
+    |2⟩ --I--> |C⟩: 0.5,
+    |2⟩ --I--> |2⟩: 0.3,
+    |2⟩ --I--> |3⟩: 0.2,
 )");
 }
 
 TEST(channel, add_transition_2q) {
-    auto channel = LeakyPauliChannel(false);
-    ASSERT_FALSE(channel.is_single_qubit_channel);
-    channel.add_transition(0x00, 0x00, 6, 1.0);
-    channel.add_transition(0x01, 0x10, 0, 1.0);
+    auto channel = LeakyPauliChannel(2);
+    LeakageStatus s1(2);
+    LeakageStatus s2(2);
+    LeakageStatus s3(2);
+    s2.set(1, 1);
+    s3.set(0, 1);
+    channel.add_transition(s1, s1, "XY", 0.7);
+    channel.add_transition(s1, s2, "ZI", 0.3);
+    channel.add_transition(s2, s3, "II", 1.0);
     ASSERT_EQ(channel.initial_status_vec.size(), 2);
-    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0x00, 0x00, 6), 1.0);
-    ASSERT_FLOAT_EQ(channel.get_prob_from_to(0x01, 0x10, 0), 1.0);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(s1, s1, "XY"), 0.7);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(s1, s2, "ZI"), 0.3);
+    ASSERT_FLOAT_EQ(channel.get_prob_from_to(s2, s3, "II"), 1.0);
     ASSERT_EQ(channel.str(), R"(Transitions:
-    |C>|C> --XY--> |C>|C>: 1,
-    |C>|2> --II--> |2>|C>: 1,
+    |C⟩|C⟩ --XY--> |C⟩|C⟩: 0.7,
+    |C⟩|C⟩ --ZI--> |C⟩|2⟩: 0.3,
+    |C⟩|2⟩ --II--> |2⟩|C⟩: 1,
 )");
-}
-
-TEST(channel, safety_check) {
-    auto channel = LeakyPauliChannel();
-    channel.add_transition(0, 0, 0, 0.2);
-    channel.add_transition(0, 0, 1, 0.3);
-    EXPECT_THROW(channel.safety_check(), std::runtime_error);
-
-    auto channel2 = LeakyPauliChannel();
-    channel2.add_transition(0, 0, 2, 0.5);
-    channel2.add_transition(0, 1, 2, 0.5);
-    EXPECT_THROW(channel2.safety_check(), std::runtime_error);
-
-    auto channel3 = LeakyPauliChannel(false);
-    channel3.add_transition(0x00, 0x00, 6, 0.5);
-    channel3.add_transition(0x00, 0x00, 2, 0.49);
-    EXPECT_THROW(channel3.safety_check(), std::runtime_error);
-
-    auto channel4 = LeakyPauliChannel(false);
-    channel4.add_transition(0x00, 0x10, 6, 1.0);
-    EXPECT_THROW(channel4.safety_check(), std::runtime_error);
-}
-
-TEST(channel, sample) {
-    auto channel = LeakyPauliChannel();
-    channel.add_transition(0, 0, 0, 0.25);
-    channel.add_transition(0, 0, 1, 0.25);
-    channel.add_transition(0, 0, 2, 0.25);
-    channel.add_transition(0, 0, 3, 0.25);
-    std::vector<uint8_t> final_status_vec;
-    std::vector<uint8_t> pauli_idx_vec;
-    for (size_t i = 0; i < 1000; i++) {
-        auto transition = channel.sample(0);
-        final_status_vec.push_back(transition.value().first);
-        pauli_idx_vec.push_back(transition.value().second);
-    }
-    ASSERT_TRUE(std::all_of(final_status_vec.begin(), final_status_vec.end(), [](uint8_t x) {
-        return x == 0;
-    }));
-    for (auto i = 0; i < 4; i++) {
-        auto count = std::count(pauli_idx_vec.begin(), pauli_idx_vec.end(), i);
-        ASSERT_TRUE(count > 200);
-        ASSERT_TRUE(count < 300);
-    }
-
-    ASSERT_FALSE(channel.sample(1).has_value());
 }

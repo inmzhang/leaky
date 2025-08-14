@@ -1,32 +1,27 @@
 """Utilities for the leaky module."""
+
 from typing import List, Sequence, Tuple
 import itertools
 import functools
 
 import numpy as np
 
-from leaky import LeakyPauliChannel
+from leaky import LeakyPauliChannel, LeakageStatus
 
 
-LeakageStatus = Tuple[int, ...]
-ProjectStatus = Tuple[Tuple[int], ...]
+LeakageSpaces = Tuple[int, ...]
+ProjectSpaces = Tuple[Tuple[int, ...], ...]
 
 
-PAULIS = np.array(
-    [
-        np.array([[1, 0], [0, 1]], dtype=complex),
-        np.array([[0, 1], [1, 0]], dtype=complex),
-        np.array([[0, -1j], [1j, 0]], dtype=complex),
-        np.array([[1, 0], [0, -1]], dtype=complex),
-    ]
-)
-
-TWO_QUBITS_PAULIS = np.array(
-    [np.kron(p1, p2) for p1, p2 in itertools.product(PAULIS, repeat=2)]
-)
+PAULIS = [
+    ("I", np.array([[1, 0], [0, 1]], dtype=complex)),
+    ("X", np.array([[0, 1], [1, 0]], dtype=complex)),
+    ("Y", np.array([[0, -1j], [1j, 0]], dtype=complex)),
+    ("Z", np.array([[1, 0], [0, -1]], dtype=complex)),
+]
 
 
-def decompose_kraus_operators_to_leaky_pauli_channel(
+def generalized_pauli_twirling(
     kraus_operators: Sequence[np.ndarray],
     num_qubits: int,
     num_level: int,
@@ -48,9 +43,7 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
     Returns:
         A LeakyPauliChannel object representing the error channel.
     """
-    if num_qubits not in [1, 2]:
-        raise ValueError("Only 1 or 2 qubits operators are supported.")
-    channel = LeakyPauliChannel(is_single_qubit_channel=num_qubits == 1)
+    channel = LeakyPauliChannel(num_qubits)
 
     all_status = list(itertools.product(range(num_level - 1), repeat=num_qubits))
     for kraus in kraus_operators:
@@ -72,46 +65,49 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
                     kraus, num_qubits, num_level, initial_projector, final_projector
                 )
                 probability: float
-                pauli_channel: List[Tuple[int, float]] = []
+                pauli_channel: List[Tuple[str, float]] = []
                 if num_r == 0:
                     assert projected_kraus.shape == (1, 1)
                     probability = (
                         prefactor * np.abs(projected_kraus).astype(float) ** 2
                     ).item()
-                    pauli_channel.append((0, probability))
+                    pauli_channel.append(("I" * num_qubits, probability))
                 else:
                     dim = 2**num_r
                     assert projected_kraus.shape == (dim, dim)
-                    for i, paulis in enumerate(itertools.product(PAULIS, repeat=num_r)):
+                    for paulis in itertools.product(PAULIS, repeat=num_r):
+                        pauli_array = [p[1] for p in paulis]
                         probability = (
                             prefactor
                             * np.abs(
                                 np.trace(
-                                    projected_kraus @ functools.reduce(np.kron, paulis)
+                                    projected_kraus
+                                    @ functools.reduce(np.kron, pauli_array)
                                 )
                                 / dim
                             )
                             ** 2
                         )
-                        idx = sum(
-                            [
-                                ((i >> (2 * (num_r - j - 1))) & 0b11)
-                                << (2 * (num_qubits - q - 1))
-                                for j, q in enumerate(q_in_r)
-                            ]
-                        )
-                        pauli_channel.append((idx, probability))
+                        pauli_string: list[str] = []
+                        i = 0
+                        for q in range(num_qubits):
+                            if q not in q_in_r:
+                                pauli_string.append("I")
+                            else:
+                                pauli_string.append(paulis[i][0])
+                                i += 1
+                        pauli_channel.append(("".join(pauli_string), probability))
 
                     probability = sum([p for _, p in pauli_channel])
                 if probability < 1e-9:
                     continue
-                for idx, p in pauli_channel:
+                for pauli_op, p in pauli_channel:
                     if p < 1e-9:
                         continue
                     channel.add_transition(
-                        leakage_status_tuple_to_int(initial_status),
-                        leakage_status_tuple_to_int(final_status),
-                        idx,
+                        LeakageStatus(status=list(initial_status)),
+                        LeakageStatus(status=list(final_status)),
+                        pauli_op,
                         p,
                     )
     if safety_check:
@@ -119,26 +115,13 @@ def decompose_kraus_operators_to_leaky_pauli_channel(
     return channel
 
 
-def leakage_status_tuple_to_int(status: LeakageStatus) -> int:
-    """Convert a leakage status tuple to an integer representation.
-
-    Args:
-        status: A tuple of leakage status. Currently, only support up to two
-            qubits.
-
-    Returns:
-        An integer representation of the leakage status.
-    """
-    return sum([s << (4 * (len(status) - i - 1)) for i, s in enumerate(status)])
-
-
-def _l2p(leakage_status: LeakageStatus) -> ProjectStatus:
+def _l2p(leakage_status: LeakageSpaces) -> ProjectSpaces:
     return tuple((0, 1) if s == 0 else (s + 1,) for s in leakage_status)
 
 
 def _get_projector_slice(
     num_level: int,
-    project_status: ProjectStatus,
+    project_status: ProjectSpaces,
 ) -> List[int]:
     """Get slice into the matrix for the subspace projection defined by project_status."""
     num_qubits = len(project_status)
@@ -153,8 +136,8 @@ def _project_kraus_with_initial_final(
     kraus: np.ndarray,
     num_qubits: int,
     num_level: int,
-    initial_project_status: ProjectStatus,
-    final_project_status: ProjectStatus,
+    initial_project_status: ProjectSpaces,
+    final_project_status: ProjectSpaces,
 ) -> np.ndarray:
     assert kraus.shape[0] == num_level**num_qubits
     initial_slice = _get_projector_slice(num_level, initial_project_status)
@@ -163,8 +146,8 @@ def _project_kraus_with_initial_final(
 
 
 def _scatter_status(
-    initial: LeakageStatus, final: LeakageStatus
-) -> List[Tuple[ProjectStatus, ProjectStatus]]:
+    initial: LeakageSpaces, final: LeakageSpaces
+) -> List[Tuple[ProjectSpaces, ProjectSpaces]]:
     initial_project_status = _l2p(initial)
     final_project_status = _l2p(final)
 

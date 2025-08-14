@@ -26,35 +26,41 @@ pip install .
 ## Basic usage
 
 ```python
-import numpy as np
 import leaky
 import stim
 
-# Assume you have a unitary repr of CNOT noise from dynamical simulation
-# which is a 2**4 * 2**4 matrix, incoorporating leakage errors up to 4-th level
-cnot_kraus = np.load('cnot_kraus.npy')
+# Quantum channel that can includes leakage transitions
+channel_2q = leaky.LeakyPauliChannel(2)
+# Qubits order is in least-significant bit order, the first qubit is the leftmost
+# state in the Dirac notation
+# leakage state 0 represents computational space, nth state represent n+1 leakage space
+leak_from = leaky.LeakageStatus(2)
+# the second qubit will leak into the first leakage space (|2⟩)
+leak_to = leaky.LeakageStatus(status=[0, 1])
 
-# Decompose the Kraus operator into pauli channels and incoherent stochastic transitions
-# with Generalize Pauli decomposition
-cnot_channel: leaky.LeakyPauliChannel = leaky.decompose_kraus_operators_to_leaky_pauli_channel(
-    kraus_operators = cnot_kraus,
-    num_qubits = 2,
-    num_level = 4,
-)
+# |C⟩|C⟩ -> |C⟩|2⟩ with associated Pauli operator X on the first qubit
+channel_2q.add_transition(leak_from, leak_to, "XI", 1.0)
+s = leaky.Simulator(4, [channel_2q])
 
-# Simulate a bell state preparation circuit
-circuit = stim.Circuit("""R 0 1 2 3
-H 0 2
+# The leakage channel can be annotated in the circuit with a special tag `leaky<n>`
+# attached to the `I` instruction, where `n` represents the nth channel bound to the
+# simulator during initialization. The channel will be broadcast to the targets
+# of the `I` instruction based on the channel dimensions.
+circuit = stim.Circuit("""
+R 0 1 2 3
+X 0 2
 CNOT 0 1 2 3
-M 0 1 2 3""")
+I[leaky<0>] 0 1 2 3
+M 0 1 2 3
+""")
+s.do_circuit(circuit)
+assert len(s.leaky_channels) == 1
+assert s.current_measurement_record().tolist() == [0, 2, 0, 2]
 
-# Initialize a leaky simulator
-simulator = leaky.Simulator(num_qubits=circuit.num_qubits)
-
-# Bind the channel to the corresponding cx gates
-# We only bind the channel to a single cx gate for demonstration
-simulator.bind_leaky_channel(leaky.Instruction('CX', [0, 1]), cnot_channel)
-
-# Sample the circuit
-results = simulator.sample_batch(circuit, shots=50000)
+# Another way to apply the leakage channel is by calling `apply_leaky_channel` method
+s.apply_leaky_channel([1, 2], channel_2q)
 ```
+
+## API References
+
+See https://github.com/inmzhang/leaky/blob/master/src/leaky/__init__.pyi.

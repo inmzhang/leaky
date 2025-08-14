@@ -1,10 +1,7 @@
-
 #include "leaky/core/channel.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <ios>
 #include <iostream>
 #include <optional>
 #include <ostream>
@@ -13,62 +10,39 @@
 #include <utility>
 
 #include "leaky/core/rand_gen.h"
+#include "leaky/core/status.h"
 
-static const std::array<std::string, 4> PAULI_1Q = {
-    "I",
-    "X",
-    "Y",
-    "Z",
-};
-
-static const std::array<std::string, 16> PAULI_2Q = {
-    "II",
-    "IX",
-    "IY",
-    "IZ",
-    "XI",
-    "XX",
-    "XY",
-    "XZ",
-    "YI",
-    "YX",
-    "YY",
-    "YZ",
-    "ZI",
-    "ZX",
-    "ZY",
-    "ZZ",
-};
-
-leaky::TransitionType leaky::get_transition_type(uint8_t initial_status, uint8_t final_status) {
-    if (initial_status == 0 && final_status == 0) {
+leaky::TransitionType leaky::get_transition_type(uint8_t from, uint8_t to) {
+    if (from == 0 && to == 0) {
         return leaky::TransitionType::R;
-    } else if (initial_status == 0 && final_status > 0) {
+    } else if (from == 0 && to > 0) {
         return leaky::TransitionType::U;
-    } else if (initial_status > 0 && final_status == 0) {
+    } else if (from > 0 && to == 0) {
         return leaky::TransitionType::D;
     } else {
         return leaky::TransitionType::L;
     }
 }
 
-std::string leaky::pauli_idx_to_string(uint8_t idx, bool is_single_qubit_channel) {
-    if (is_single_qubit_channel) {
-        return PAULI_1Q[idx];
-    }
-    return PAULI_2Q[idx];
+leaky::Transition::Transition(LeakageStatus to_status, std::string_view pauli_operator)
+    : to_status(std::move(to_status)), pauli_operator(pauli_operator) {
 }
 
-leaky::LeakyPauliChannel::LeakyPauliChannel(bool is_single_qubit_transition)
-    : initial_status_vec(0), transitions(0), cumulative_probs(0), is_single_qubit_channel(is_single_qubit_transition) {
+leaky::LeakyPauliChannel::LeakyPauliChannel(size_t num_qubits)
+    : initial_status_vec(0), transitions(0), cumulative_probs(0), num_qubits(num_qubits) {
 }
 
 void leaky::LeakyPauliChannel::add_transition(
-    uint8_t initial_status, uint8_t final_status, uint8_t pauli_channel_idx, double probability) {
-    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
+    LeakageStatus from, LeakageStatus to, std::string_view pauli_operator, double probability) {
+    if ((from.num_qubits != to.num_qubits) || (from.num_qubits != pauli_operator.length())) {
+        throw std::invalid_argument(
+            "The number of qubits in `from` and `to` status should both be equal to the length of the pauli operator.");
+    }
+
+    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), from);
     if (it != initial_status_vec.end()) {
         auto idx = std::distance(initial_status_vec.begin(), it);
-        transitions[idx].emplace_back(std::make_pair(final_status, pauli_channel_idx));
+        transitions[idx].emplace_back(to, pauli_operator);
         auto &probs = cumulative_probs[idx];
         auto cum_prob = probs.back() + probability;
         if (cum_prob - 1.0 > 1e-6) {
@@ -78,34 +52,33 @@ void leaky::LeakyPauliChannel::add_transition(
         }
         probs.push_back(cum_prob);
     } else {
-        initial_status_vec.push_back(initial_status);
-        transitions.push_back(std::vector<transition>{std::make_pair(final_status, pauli_channel_idx)});
+        initial_status_vec.push_back(from);
+        transitions.push_back(std::vector<Transition>{Transition{to, pauli_operator}});
         cumulative_probs.push_back(std::vector<double>{probability});
     }
 }
 
 double leaky::LeakyPauliChannel::get_prob_from_to(
-    uint8_t initial_status, uint8_t final_status, uint8_t pauli_idx) const {
-    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
+    LeakageStatus from, LeakageStatus to, std::string_view pauli_operator) const {
+    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), from);
     if (it == initial_status_vec.end()) {
         return 0.0;
     }
     auto idx = std::distance(initial_status_vec.begin(), it);
-    auto &transitions_from_initial = transitions[idx];
+    auto &transitions_vec = transitions[idx];
     auto &probs = cumulative_probs[idx];
-    auto it2 = std::find_if(
-        transitions_from_initial.begin(), transitions_from_initial.end(), [final_status, pauli_idx](auto &trans) {
-            return trans.first == final_status && trans.second == pauli_idx;
-        });
-    if (it2 == transitions_from_initial.end()) {
+    auto it2 = std::find_if(transitions_vec.begin(), transitions_vec.end(), [to, pauli_operator](auto &trans) {
+        return trans.to_status == to && trans.pauli_operator == pauli_operator;
+    });
+    if (it2 == transitions_vec.end()) {
         return 0.0;
     }
-    auto idx2 = std::distance(transitions_from_initial.begin(), it2);
+    auto idx2 = std::distance(transitions_vec.begin(), it2);
     auto prob = idx2 == 0 ? probs[idx2] : probs[idx2] - probs[idx2 - 1];
     return prob;
 }
 
-std::optional<leaky::transition> leaky::LeakyPauliChannel::sample(uint8_t initial_status) const {
+std::optional<leaky::Transition> leaky::LeakyPauliChannel::sample(LeakageStatus initial_status) const {
     auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
     if (it == initial_status_vec.end()) {
         return std::nullopt;
@@ -131,48 +104,22 @@ void leaky::LeakyPauliChannel::safety_check() const {
                 "The sum of probabilities for each initial status should be 1, but get " +
                 std::to_string(probs.back()));
         }
-        for (auto [final_status, pauli_channel_idx] : transitions_from_initial) {
-            if (is_single_qubit_channel) {
-                auto transition_type = leaky::get_transition_type(initial_status, final_status);
-                if (transition_type != leaky::TransitionType::R && pauli_channel_idx != 0) {
+        for (const auto &trans : transitions_from_initial) {
+            for (auto i = 0; i < initial_status.num_qubits; i++) {
+                uint8_t from = initial_status.get(i);
+                uint8_t to = trans.to_status.get(i);
+                auto transition_type = leaky::get_transition_type(from, to);
+                char pauli = trans.pauli_operator[i];
+                if (transition_type != leaky::TransitionType::R && pauli != 'I') {
                     throw std::runtime_error("The attached pauli of transitions for the qubits in D/U/L should be I");
                 }
-                continue;
-            }
-            auto i1 = initial_status >> 4;
-            auto i2 = initial_status & 0x0F;
-            auto f1 = final_status >> 4;
-            auto f2 = final_status & 0x0F;
-            auto transition_type1 = leaky::get_transition_type(i1, f1);
-            auto transition_type2 = leaky::get_transition_type(i2, f2);
-            if (transition_type1 != leaky::TransitionType::R && pauli_channel_idx >> 2 != 0) {
-                throw std::runtime_error("The attached pauli of transitions for the qubits in D/U/L should be I");
-            }
-            if (transition_type2 != leaky::TransitionType::R && (pauli_channel_idx & 0x03) != 0) {
-                throw std::runtime_error("The attached pauli of transitions for the qubits in D/U/L should be I");
             }
         }
     }
 }
 
-std::string leakage_status_to_string(uint8_t status) {
-    if (status == 0) {
-        return "|C>";
-    } else {
-        std::stringstream s;
-        s << "|" << static_cast<int>(status + 1) << ">";
-        return s.str();
-    }
-}
-
-std::string initial_status_to_string(uint8_t initial_status, bool is_single_qubit_transition) {
-    return is_single_qubit_transition
-               ? leakage_status_to_string(initial_status)
-               : leakage_status_to_string(initial_status >> 4) + leakage_status_to_string(initial_status & 0x0F);
-}
-
-uint8_t leaky::LeakyPauliChannel::num_transitions() const {
-    uint8_t count = 0;
+size_t leaky::LeakyPauliChannel::num_transitions() const {
+    size_t count = 0;
     for (size_t i = 0; i < initial_status_vec.size(); i++) {
         count += transitions[i].size();
     }
@@ -183,26 +130,18 @@ std::string leaky::LeakyPauliChannel::str() const {
     std::stringstream out;
     out << "Transitions:\n";
     for (size_t i = 0; i < initial_status_vec.size(); i++) {
-        auto initial_status = initial_status_vec[i];
-        std::string initial_status_str = initial_status_to_string(initial_status, is_single_qubit_channel);
+        const auto &from_status = initial_status_vec[i];
+        std::string from_status_str = from_status.str();
         for (size_t j = 0; j < transitions[i].size(); j++) {
             auto prob = j == 0 ? cumulative_probs[i][j] : cumulative_probs[i][j] - cumulative_probs[i][j - 1];
-            auto [final_status, pauli_channel_idx] = transitions[i][j];
-            auto final_status_str = initial_status_to_string(final_status, is_single_qubit_channel);
-            auto pauli_str = leaky::pauli_idx_to_string(pauli_channel_idx, is_single_qubit_channel);
-            out << "    " << initial_status_str << " --" << pauli_str << "--> " << final_status_str << ": " << prob
+            const auto &trans = transitions[i][j];
+            auto to_status_str = trans.to_status.str();
+            out << "    " << from_status_str << " --" << trans.pauli_operator << "--> " << to_status_str << ": " << prob
                 << ",\n";
         }
     }
     if (initial_status_vec.empty()) {
         out << "   None\n";
     }
-    return out.str();
-}
-
-std::string leaky::LeakyPauliChannel::repr() const {
-    std::stringstream out;
-    out << "LeakyPauliChannel(is_single_qubit_channel=" << std::boolalpha << is_single_qubit_channel << ", with "
-        << unsigned(num_transitions()) << " transitions attached)\n";
     return out.str();
 }

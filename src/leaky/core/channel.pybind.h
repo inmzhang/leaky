@@ -8,6 +8,8 @@ namespace py = pybind11;
 
 namespace leaky_pybind {
 
+py::class_<leaky::Transition> pybind_transition(py::module &m);
+void pybind_transition_methods(py::module &m, py::class_<leaky::Transition> &c);
 py::class_<leaky::LeakyPauliChannel> pybind_channel(py::module &m);
 void pybind_channel_methods(py::module &m, py::class_<leaky::LeakyPauliChannel> &c);
 
