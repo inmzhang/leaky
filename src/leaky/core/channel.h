@@ -24,7 +24,7 @@ TransitionType get_transition_type(uint8_t from, uint8_t to);
 
 struct Transition {
     LeakageStatus to_status;
-    std::string_view pauli_operator;
+    std::string pauli_operator;
 
     explicit Transition(LeakageStatus to_status, std::string_view pauli_operator);
 };
