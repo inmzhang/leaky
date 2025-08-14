@@ -76,10 +76,9 @@ void leaky::Simulator::apply_leaky_channel(
             target_status.set(i, leakage_status.get(qubit));
         }
         auto sample = channel.sample(target_status);
-        if (!sample.has_value()) {
-            throw std::invalid_argument(
-                "The initial status " + target_status.str() + " is not in the channel's initial status set.");
-        }
+        if (!sample.has_value())
+            return;
+
         auto trans = sample.value();
         auto pauli_operator = trans.pauli_operator;
 
