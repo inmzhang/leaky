@@ -60,3 +60,7 @@ assert s.current_measurement_record().tolist() == [0, 2, 0, 2]
 # Another way to apply the leakage channel is by calling `apply_leaky_channel` method
 s.apply_leaky_channel([1, 2], channel_2q)
 ```
+
+## API References
+
+See https://github.com/inmzhang/leaky/blob/master/src/leaky/__init__.pyi.
