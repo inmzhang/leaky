@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Iterable, Iterator, Sequence, Tuple, Optional, TYPE_CHECKING, Union
+from typing import Iterable, Iterator, Sequence, Optional, TYPE_CHECKING, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -251,18 +251,18 @@ class LeakageStatus:
         """
         ...
 
-    def to_list(self) -> list[int]:
-        """Convert the leakage status to a list.
+    @property
+    def data(self) -> list[int]:
+        """Get the raw data of the leakage status.
 
         Returns:
             A list representing the leakage status of each qubit.
 
         Examples:
             >>> import leaky
-            >>> status = leaky.LeakageStatus(num_qubits=2)
-            >>> status.set(0, 1)
-            >>> status.to_list()
-            [1, 0]
+            >>> status = leaky.LeakageStatus(status=[0, 1])
+            >>> status.data
+            [0, 1]
         """
         ...
 
@@ -541,3 +541,27 @@ class Simulator:
     def leakage_masks_record(self) -> list[int]:
         """Get the leakage masks record of the simulator."""
         ...
+
+def generalized_pauli_twirling(
+    kraus_operators: Sequence[np.ndarray],
+    num_qubits: int,
+    num_level: int,
+    safety_check: bool = True,
+) -> LeakyPauliChannel:
+    """Decompose the Kraus operators into a leaky pauli channel representation with
+    Generalized Pauli Twirling(GPT).
+
+    Args:
+        kraus_operators: A sequence of Kraus operators corresponding to an operation's error channel.
+        num_qubits: The number of qubits in the operation.
+        num_level: The number of levels of the quantum system to be considered.
+        safety_check: If True, perform a safety check to ensure the channel is valid.
+            A channel is valid if the sum of the probabilities of all transitions
+            from a given initial status is 1. And the pauli channel related to the
+            qubits with transition type that not in R(stay in the computational space)
+            should always be I. Default is True.
+
+    Returns:
+        A LeakyPauliChannel object representing the error channel.
+    """
+    ...

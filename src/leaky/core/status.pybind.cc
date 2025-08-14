@@ -53,7 +53,5 @@ void leaky_pybind::pybind_status_methods(py::module &m, py::class_<leaky::Leakag
             return py::make_iterator(self.s.begin(), self.s.end());
         },
         py::keep_alive<0, 1>());
-    c.def("to_list", [](leaky::LeakageStatus &self) {
-        return std::vector<uint8_t>(self.s.begin(), self.s.end());
-    });
+    c.def_readonly("data", &leaky::LeakageStatus::s);
 }
