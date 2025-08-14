@@ -62,15 +62,24 @@ class LeakageStatus:
     The integer 0 represents the computational space, and the integers greater than 0
     represent the leakage space.
     """
-    def __init__(self, num_qubits: int) -> None:
+    def __init__(
+        self, num_qubits: int | None = None, status: list[int] | None = None
+    ) -> None:
         """Initialize a `leaky.LeakageStatus`.
 
         Args:
-            num_qubits: The number of qubits this status holds.
+            num_qubits: The number of qubits this status holds. Either this or
+                `status` must be provided. If this is provided, the status will
+                be initialized to all 0s (computational space). If both are provided,
+                the length of `status` must match `num_qubits`.
+            status: A list of integers representing the leakage status of each qubit.
+                Either this or `num_qubits` must be provided. If both are provided,
+                the length of `status` must match `num_qubits`.
 
         Examples:
             >>> import leaky
-            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status1 = leaky.LeakageStatus(num_qubits=2)
+            >>> status2 = leaky.LeakageStatus(status=[0, 2])
         """
         ...
 
@@ -238,6 +247,21 @@ class LeakageStatus:
             >>> status = leaky.LeakageStatus(num_qubits=2)
             >>> status.set(0, 1)
             >>> list(status)
+            [1, 0]
+        """
+        ...
+
+    def to_list(self) -> list[int]:
+        """Convert the leakage status to a list.
+
+        Returns:
+            A list representing the leakage status of each qubit.
+
+        Examples:
+            >>> import leaky
+            >>> status = leaky.LeakageStatus(num_qubits=2)
+            >>> status.set(0, 1)
+            >>> status.to_list()
             [1, 0]
         """
         ...
