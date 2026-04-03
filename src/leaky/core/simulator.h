@@ -44,7 +44,6 @@ struct Simulator {
     void append_result_masks(const stim::CircuitInstruction& inst);
     [[nodiscard]] uint8_t compute_group_leakage_mask(stim::SpanRef<const stim::GateTarget> group) const;
     void do_circuit_internal(const stim::Circuit& circuit, bool validate_capacity);
-    void handle_transition(uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, char pauli);
 };
 
 }  // namespace leaky

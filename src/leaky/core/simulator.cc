@@ -71,52 +71,8 @@ void validate_qubit_targets(stim::SpanRef<const stim::GateTarget> targets, std::
     }
 }
 
-void apply_single_qubit_pauli(
-    stim::TableauSimulator<stim::MAX_BITWORD_WIDTH>& tableau_simulator,
-    stim::SpanRef<const stim::GateTarget> target,
-    char pauli) {
-    switch (pauli) {
-        case 'I':
-            return;
-        case 'X':
-            tableau_simulator.do_X({GateType::X, {}, target, {}});
-            return;
-        case 'Y':
-            tableau_simulator.do_Y({GateType::Y, {}, target, {}});
-            return;
-        case 'Z':
-            tableau_simulator.do_Z({GateType::Z, {}, target, {}});
-            return;
-        default:
-            throw std::invalid_argument("Unsupported single-qubit Pauli operator.");
-    }
-}
-
 }  // namespace
 
-void leaky::Simulator::handle_transition(
-    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, char pauli) {
-    auto qubit = target[0].qubit_value();
-    leakage_status.s[qubit] = next_status;
-    switch (leaky::get_transition_type(cur_status, next_status)) {
-        case leaky::TransitionType::R:
-            apply_single_qubit_pauli(tableau_simulator, target, pauli);
-            return;
-        case leaky::TransitionType::L:
-            return;
-        case leaky::TransitionType::U:
-            if (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5) {
-                tableau_simulator.do_X({GateType::X, {}, target, {}});
-            }
-            return;
-        case leaky::TransitionType::D:
-            tableau_simulator.do_RZ({GateType::R, {}, target, {}});
-            if (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5) {
-                tableau_simulator.do_X({GateType::X, {}, target, {}});
-            }
-            return;
-    }
-}
 leaky::Simulator::Simulator(
     uint32_t num_qubits, std::vector<LeakyPauliChannel> leaky_channels, std::optional<uint64_t> seed)
     : num_qubits(num_qubits),
@@ -179,6 +135,19 @@ void leaky::Simulator::apply_leaky_channel(
             "The number of targets in the instruction should be a multiple of the number of qubits in the channel.");
     }
     std::vector<uint8_t> target_status(step);
+    std::vector<stim::GateTarget> x_targets;
+    std::vector<stim::GateTarget> y_targets;
+    std::vector<stim::GateTarget> z_targets;
+    std::vector<stim::GateTarget> u_flip_targets;
+    std::vector<stim::GateTarget> d_targets;
+    std::vector<stim::GateTarget> d_flip_targets;
+    x_targets.reserve(targets.size());
+    y_targets.reserve(targets.size());
+    z_targets.reserve(targets.size());
+    u_flip_targets.reserve(targets.size());
+    d_targets.reserve(targets.size());
+    d_flip_targets.reserve(targets.size());
+
     for (size_t k = 0; k < targets.size(); k += step) {
         for (size_t i = 0; i < step; ++i) {
             auto qubit = targets[i + k].qubit_value();
@@ -195,9 +164,63 @@ void leaky::Simulator::apply_leaky_channel(
         const auto* pauli_data = pauli_operator.data();
 
         for (size_t i = 0; i < step; ++i) {
-            auto target = targets.sub(i + k, i + k + 1);
-            handle_transition(target_status[i], to_status[i], target, pauli_data[i]);
+            const auto& gate_target = targets[i + k];
+            auto qubit = gate_target.qubit_value();
+            auto transition_type = leaky::get_transition_type(target_status[i], to_status[i]);
+            leakage_status.s[qubit] = to_status[i];
+
+            switch (transition_type) {
+                case leaky::TransitionType::R:
+                    switch (pauli_data[i]) {
+                        case 'I':
+                            break;
+                        case 'X':
+                            x_targets.push_back(gate_target);
+                            break;
+                        case 'Y':
+                            y_targets.push_back(gate_target);
+                            break;
+                        case 'Z':
+                            z_targets.push_back(gate_target);
+                            break;
+                        default:
+                            throw std::invalid_argument("Unsupported single-qubit Pauli operator.");
+                    }
+                    break;
+                case leaky::TransitionType::L:
+                    break;
+                case leaky::TransitionType::U:
+                    if (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5) {
+                        u_flip_targets.push_back(gate_target);
+                    }
+                    break;
+                case leaky::TransitionType::D:
+                    d_targets.push_back(gate_target);
+                    if (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5) {
+                        d_flip_targets.push_back(gate_target);
+                    }
+                    break;
+            }
         }
+    }
+
+    if (!d_targets.empty()) {
+        tableau_simulator.do_RZ({GateType::R, {}, d_targets, {}});
+    }
+    if (!d_flip_targets.empty()) {
+        tableau_simulator.do_X({GateType::X, {}, d_flip_targets, {}});
+    }
+    if (!u_flip_targets.empty()) {
+        tableau_simulator.do_X({GateType::X, {}, u_flip_targets, {}});
+    }
+    if (!x_targets.empty()) {
+        tableau_simulator.do_X({GateType::X, {}, x_targets, {}});
+    }
+    if (!y_targets.empty()) {
+        tableau_simulator.do_Y({GateType::Y, {}, y_targets, {}});
+    }
+    if (!z_targets.empty()) {
+        tableau_simulator.do_Z({GateType::Z, {}, z_targets, {}});
     }
 }
 
