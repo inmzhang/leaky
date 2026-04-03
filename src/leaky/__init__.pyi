@@ -1,4 +1,13 @@
-"""Leaky: An implementation of Google's Pauli+ simulator based on `stim`."""
+"""Leaky: Python bindings for leakage-aware stabilizer simulation.
+
+Public API overview:
+
+- `LeakageStatus`: per-qubit leakage labels.
+- `LeakyPauliChannel`: transitions between leakage configurations.
+- `Simulator`: a `stim`-backed simulator with leakage tracking.
+- `generalized_pauli_twirling`: utility for converting Kraus operators into
+  `LeakyPauliChannel` instances.
+"""
 
 # (This is a stubs file describing the classes and methods in leaky.)
 from __future__ import annotations
@@ -69,7 +78,11 @@ class LeakageStatus:
     """A vector container that holds the leakage status of a list of qubits.
 
     The integer 0 represents the computational space, and the integers greater than 0
-    represent the leakage space.
+    represent leakage spaces.
+
+    Notes:
+        Accessors validate qubit indices and raise `IndexError` when the index is
+        out of bounds.
     """
     def __init__(
         self, num_qubits: int | None = None, status: list[int] | None = None
@@ -108,6 +121,9 @@ class LeakageStatus:
             >>> import leaky
             >>> status = leaky.LeakageStatus(num_qubits=2)
             >>> status.set(0, 1)
+
+        Raises:
+            IndexError: If `qubit` is out of range.
         """
         ...
 
@@ -122,6 +138,9 @@ class LeakageStatus:
             >>> status = leaky.LeakageStatus(num_qubits=2)
             >>> status.set(0, 1)
             >>> status.reset(0)
+
+        Raises:
+            IndexError: If `qubit` is out of range.
         """
         ...
 
@@ -140,6 +159,9 @@ class LeakageStatus:
             >>> status.set(0, 1)
             >>> status.get(0)
             1
+
+        Raises:
+            IndexError: If `qubit` is out of range.
         """
         ...
 
@@ -173,6 +195,9 @@ class LeakageStatus:
             True
             >>> status.is_leaked(1)
             False
+
+        Raises:
+            IndexError: If `qubit` is out of range.
         """
         ...
 
@@ -276,15 +301,15 @@ class LeakageStatus:
         ...
 
 class Transition:
-    """Transition into a leakage status with a associated pauli operator."""
+    """A sampled transition from a leaky channel."""
     @property
     def to_status(self) -> LeakageStatus:
-        """The leakage status this transition ends to."""
+        """The leakage status reached after the transition."""
         ...
 
     @property
     def pauli_operator(self) -> str:
-        """The Pauli operator associated with this transition."""
+        """The Pauli operator applied to qubits that remain computational."""
         ...
 
 class LeakyPauliChannel:
@@ -303,7 +328,7 @@ class LeakyPauliChannel:
 
     @property
     def num_transitions(self) -> int:
-        """The number of different types of transitions in the channel."""
+        """The number of distinct `(from_status, to_status, pauli_operator)` entries."""
         ...
 
     def add_transition(
@@ -347,6 +372,10 @@ class LeakyPauliChannel:
         Returns:
             The probability of the transition.
 
+        Notes:
+            Returns `0.0` when the channel has no matching transition entry for
+            the given arguments.
+
         Examples:
             >>> from leaky import LeakyPauliChannel, LeakageStatus
             >>> channel = LeakyPauliChannel(2)
@@ -369,6 +398,9 @@ class LeakyPauliChannel:
         Notes:
             This method uses the module-level RNG controlled by
             `leaky.set_seed(...)` and `leaky.randomize()`.
+
+            This is mainly useful for introspection or testing. During
+            simulation, `Simulator` uses its own instance-local RNG.
 
         Examples:
             >>> from leaky import LeakyPauliChannel, LeakageStatus
@@ -403,7 +435,7 @@ class LeakyPauliChannel:
         ...
 
 class ReadoutStrategy(enum.Enum):
-    """The strategy for readout simulating results."""
+    """Strategies for converting leaked measurement outcomes into output labels."""
 
     RawLabel = "RawLabel"
     RandomLeakageProjection = "RandomLeakageProjection"
@@ -430,6 +462,10 @@ class Simulator:
                 channel in the list.
             seed: The random seed to use for this simulator instance only.
 
+        Notes:
+            `seed` does not affect module-level helper functions such as
+            `leaky.rand_float(...)` or `LeakyPauliChannel.sample(...)`.
+
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(2)
@@ -444,6 +480,10 @@ class Simulator:
                 should be added to the circuit in the exact form
                 `I[leaky<n>] q0 q1 ...`, where `n` is the index of the channel in
                 the list `leaky_channels` passed to the simulator constructor.
+
+        Raises:
+            ValueError: If the circuit exceeds the simulator qubit capacity or a
+                tagged leaky instruction is malformed.
         """
         ...
 
@@ -457,7 +497,11 @@ class Simulator:
         """Apply an instruction to the simulator.
 
         Args:
-            instruction: The stim circuit instruction to simulate.
+            name: The Stim gate name.
+            targets: The gate targets.
+            args: Gate arguments, such as probabilities for noisy operations.
+            tag: Optional instruction tag. Use `tag=\"leaky<n>\"` with gate `\"I\"`
+                to apply a bound leaky channel.
 
         Examples:
             >>> import leaky
@@ -479,6 +523,10 @@ class Simulator:
                 target. The targets will be grouped into groups that have the
                 same number of qubits as the channel expects.
             channel: The leaky channel to apply.
+
+        Raises:
+            ValueError: If the targets are not raw qubit targets or if the
+                target count is not a multiple of `channel.num_qubits`.
         """
         ...
 
@@ -510,6 +558,8 @@ class Simulator:
             `ReadoutStrategy.RawLabel` uses the maximum leakage level among the
             measured qubits as the returned leakage label.
 
+            The returned array always has `dtype=np.uint8`.
+
         Examples:
             >>> import leaky
             >>> simulator = leaky.Simulator(1)
@@ -535,6 +585,10 @@ class Simulator:
         Returns:
             A numpy array of measurement results with `dtype=uint8`. The shape of the array
             is `(shots, circuit.num_measurements)`.
+
+        Raises:
+            ValueError: If `shots` is negative or the circuit exceeds the
+                simulator qubit capacity.
         """
         ...
 
@@ -582,5 +636,11 @@ def generalized_pauli_twirling(
 
     Returns:
         A LeakyPauliChannel object representing the error channel.
+
+    Notes:
+        Each Kraus operator is expected to have shape
+        `(num_level**num_qubits, num_level**num_qubits)`. The returned channel
+        can be used directly with `Simulator(..., leaky_channels=[...])` or
+        `Simulator.apply_leaky_channel(...)`.
     """
     ...
