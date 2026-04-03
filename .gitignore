@@ -11,6 +11,7 @@ build
 .cache
 .idea
 cmake-build-*
+build-prof
 *.so
 out
 compile_commands.json

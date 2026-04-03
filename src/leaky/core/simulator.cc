@@ -1,6 +1,7 @@
 #include "leaky/core/simulator.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <cstddef>
@@ -70,24 +71,49 @@ void validate_qubit_targets(stim::SpanRef<const stim::GateTarget> targets, std::
     }
 }
 
+void apply_single_qubit_pauli(
+    stim::TableauSimulator<stim::MAX_BITWORD_WIDTH>& tableau_simulator,
+    stim::SpanRef<const stim::GateTarget> target,
+    char pauli) {
+    switch (pauli) {
+        case 'I':
+            return;
+        case 'X':
+            tableau_simulator.do_X({GateType::X, {}, target, {}});
+            return;
+        case 'Y':
+            tableau_simulator.do_Y({GateType::Y, {}, target, {}});
+            return;
+        case 'Z':
+            tableau_simulator.do_Z({GateType::Z, {}, target, {}});
+            return;
+        default:
+            throw std::invalid_argument("Unsupported single-qubit Pauli operator.");
+    }
+}
+
 }  // namespace
 
 void leaky::Simulator::handle_transition(
-    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, std::string_view pauli) {
-    leakage_status.set(target[0].qubit_value(), next_status);
+    uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, char pauli) {
+    auto qubit = target[0].qubit_value();
+    leakage_status.s[qubit] = next_status;
     switch (leaky::get_transition_type(cur_status, next_status)) {
         case leaky::TransitionType::R:
-            tableau_simulator.do_gate({stim::GATE_DATA.at(pauli).id, {}, target, {}});
+            apply_single_qubit_pauli(tableau_simulator, target, pauli);
             return;
         case leaky::TransitionType::L:
             return;
         case leaky::TransitionType::U:
-            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
-            // tableau_simulator.do_RZ({GateType::R, {}, target});
+            if (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5) {
+                tableau_simulator.do_X({GateType::X, {}, target, {}});
+            }
             return;
         case leaky::TransitionType::D:
             tableau_simulator.do_RZ({GateType::R, {}, target, {}});
-            tableau_simulator.do_X_ERROR({GateType::X_ERROR, std::vector<double>{0.5}, target, {}});
+            if (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5) {
+                tableau_simulator.do_X({GateType::X, {}, target, {}});
+            }
             return;
     }
 }
@@ -113,7 +139,7 @@ uint8_t leaky::Simulator::compute_group_leakage_mask(stim::SpanRef<const stim::G
                 "Result-producing instruction contains an unsupported non-qubit target: " + target.target_str() + ".");
         }
         saw_qubit = true;
-        leakage_mask = std::max(leakage_mask, leakage_status.get(target.qubit_value()));
+        leakage_mask = std::max(leakage_mask, leakage_status.s[target.qubit_value()]);
     }
     return saw_qubit ? leakage_mask : 0;
 }
@@ -129,6 +155,7 @@ void leaky::Simulator::append_result_masks(const stim::CircuitInstruction& inst)
     }
 
     auto starting_size = leakage_masks_record.size();
+    leakage_masks_record.reserve(starting_size + produced_results);
     inst.for_combined_target_groups([&](std::span<const stim::GateTarget> group) {
         leakage_masks_record.push_back(compute_group_leakage_mask(group));
     });
@@ -151,25 +178,25 @@ void leaky::Simulator::apply_leaky_channel(
         throw std::invalid_argument(
             "The number of targets in the instruction should be a multiple of the number of qubits in the channel.");
     }
+    std::vector<uint8_t> target_status(step);
     for (size_t k = 0; k < targets.size(); k += step) {
-        LeakageStatus target_status(step);
         for (size_t i = 0; i < step; ++i) {
             auto qubit = targets[i + k].qubit_value();
-            target_status.set(i, leakage_status.get(qubit));
+            target_status[i] = leakage_status.s[qubit];
         }
-        auto sample = channel.sample(target_status, leakage_rng);
-        if (!sample.has_value()) {
+        auto sample = channel.sample_weighted_transition(target_status, leakage_rng);
+        if (sample == nullptr) {
             continue;
         }
 
-        const auto& trans = sample.value();
+        const auto& trans = sample->transition;
         const auto& pauli_operator = trans.pauli_operator;
+        const auto* to_status = trans.to_status.s.data();
+        const auto* pauli_data = pauli_operator.data();
 
         for (size_t i = 0; i < step; ++i) {
             auto target = targets.sub(i + k, i + k + 1);
-            uint8_t from = target_status.get(i);
-            uint8_t to = trans.to_status.get(i);
-            handle_transition(from, to, target, pauli_operator.substr(i, 1));
+            handle_transition(target_status[i], to_status[i], target, pauli_data[i]);
         }
     }
 }
@@ -189,7 +216,7 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
                     "Leaky channel index " + std::to_string(*leaky_channel_index) + " in the instruction" + inst.str() +
                     " exceeds the number of defined leaky channels: " + std::to_string(leaky_channels.size()));
             }
-            auto leaky_channel = leaky_channels[*leaky_channel_index];
+            const auto& leaky_channel = leaky_channels[*leaky_channel_index];
             apply_leaky_channel(targets, leaky_channel);
             return;
         }
@@ -228,13 +255,12 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
     }
 
     auto handle_ideal_gate_group = [&](std::span<const stim::GateTarget> group) {
-        stim::CircuitInstruction split_inst = {gate_type, inst.args, group, inst.tag};
-        bool is_leaked = std::any_of(group.begin(), group.end(), [&](const auto& target) {
-            return target.has_qubit_value() && leakage_status.is_leaked(target.qubit_value());
-        });
-        if (!is_leaked) {
-            tableau_simulator.do_gate(split_inst);
+        for (const auto& target : group) {
+            if (target.has_qubit_value() && leakage_status.s[target.qubit_value()] > 0) {
+                return;
+            }
         }
+        tableau_simulator.do_gate({gate_type, inst.args, group, {}});
     };
 
     if (flags & stim::GATE_TARGETS_COMBINERS) {
@@ -253,7 +279,11 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
 }
 
 void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
-    if (circuit.count_qubits() > num_qubits) {
+    do_circuit_internal(circuit, true);
+}
+
+void leaky::Simulator::do_circuit_internal(const stim::Circuit& circuit, bool validate_capacity) {
+    if (validate_capacity && circuit.count_qubits() > num_qubits) {
         throw std::invalid_argument(
             "The number of qubits in the circuit exceeds the maximum capacity of the simulator.");
     }
@@ -262,7 +292,7 @@ void leaky::Simulator::do_circuit(const stim::Circuit& circuit) {
             uint64_t repeats = op.repeat_block_rep_count();
             const auto& block = op.repeat_block_body(circuit);
             for (uint64_t k = 0; k < repeats; k++) {
-                do_circuit(block);
+                do_circuit_internal(block, false);
             }
         } else {
             do_gate(op);
@@ -281,6 +311,20 @@ std::vector<uint8_t> leaky::Simulator::current_measurement_record(ReadoutStrateg
     auto results = std::vector<uint8_t>(leakage_masks_record.size());
     append_measurement_record_into(results.data(), readout_strategy);
     return results;
+}
+
+void leaky::Simulator::sample_into(
+    const stim::Circuit& circuit, size_t shots, uint8_t* results_begin_ptr, ReadoutStrategy readout_strategy) {
+    if (circuit.count_qubits() > num_qubits) {
+        throw std::invalid_argument(
+            "The number of qubits in the circuit exceeds the maximum capacity of the simulator.");
+    }
+    const auto num_measurements = circuit.count_measurements();
+    for (size_t shot = 0; shot < shots; shot++) {
+        clear();
+        do_circuit_internal(circuit, false);
+        append_measurement_record_into(results_begin_ptr + shot * num_measurements, readout_strategy);
+    }
 }
 
 void leaky::Simulator::append_measurement_record_into(uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy) {

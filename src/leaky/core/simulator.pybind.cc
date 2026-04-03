@@ -128,14 +128,9 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
             stim::Circuit converted_circuit = stim::Circuit(circuit_str.c_str()).flattened();
             auto num_measurements = static_cast<py::ssize_t>(converted_circuit.count_measurements());
             py::array_t<uint8_t> results({shots, num_measurements});
-            auto* results_ptr = results.mutable_data();
 
             py::gil_scoped_release release;
-            for (py::ssize_t i = 0; i < shots; i++) {
-                self.clear();
-                self.do_circuit(converted_circuit);
-                self.append_measurement_record_into(results_ptr + i * num_measurements, readout_strategy);
-            }
+            self.sample_into(converted_circuit, static_cast<size_t>(shots), results.mutable_data(), readout_strategy);
             return results;
         },
         py::arg("circuit"),

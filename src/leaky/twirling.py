@@ -21,6 +21,17 @@ PAULIS = [
 ]
 
 
+@functools.lru_cache(maxsize=None)
+def _cached_pauli_products(num_qubits: int) -> Tuple[Tuple[str, np.ndarray], ...]:
+    return tuple(
+        (
+            "".join(pauli[0] for pauli in paulis),
+            functools.reduce(np.kron, (pauli[1] for pauli in paulis)),
+        )
+        for paulis in itertools.product(PAULIS, repeat=num_qubits)
+    )
+
+
 def generalized_pauli_twirling(
     kraus_operators: Sequence[np.ndarray],
     num_qubits: int,
@@ -57,6 +68,7 @@ def generalized_pauli_twirling(
                 if s0 == 0 and s1 == 0
             ]
             num_r = len(q_in_r)
+            q_in_r_mask = tuple(i in q_in_r for i in range(num_qubits))
 
             prefactor: float = 1.0 / 2**num_u
             projectors = _scatter_status(initial_status, final_status)
@@ -75,28 +87,22 @@ def generalized_pauli_twirling(
                 else:
                     dim = 2**num_r
                     assert projected_kraus.shape == (dim, dim)
-                    for paulis in itertools.product(PAULIS, repeat=num_r):
-                        pauli_array = [p[1] for p in paulis]
+                    for pauli_label, pauli_matrix in _cached_pauli_products(num_r):
                         probability = (
                             prefactor
-                            * np.abs(
-                                np.trace(
-                                    projected_kraus
-                                    @ functools.reduce(np.kron, pauli_array)
-                                )
-                                / dim
-                            )
+                            * np.abs(np.trace(projected_kraus @ pauli_matrix) / dim)
                             ** 2
                         )
-                        pauli_string: list[str] = []
-                        i = 0
-                        for q in range(num_qubits):
-                            if q not in q_in_r:
-                                pauli_string.append("I")
-                            else:
-                                pauli_string.append(paulis[i][0])
-                                i += 1
-                        pauli_channel.append(("".join(pauli_string), probability))
+                        pauli_iter = iter(pauli_label)
+                        pauli_channel.append(
+                            (
+                                "".join(
+                                    next(pauli_iter) if in_r else "I"
+                                    for in_r in q_in_r_mask
+                                ),
+                                probability,
+                            )
+                        )
 
                     probability = sum([p for _, p in pauli_channel])
                 if probability < 1e-9:
@@ -119,17 +125,27 @@ def _l2p(leakage_status: LeakageSpaces) -> ProjectSpaces:
     return tuple((0, 1) if s == 0 else (s + 1,) for s in leakage_status)
 
 
+@functools.lru_cache(maxsize=None)
+def _get_projector_slice_cached(
+    num_level: int,
+    project_status: ProjectSpaces,
+) -> Tuple[int, ...]:
+    num_qubits = len(project_status)
+    status = project_status[0]
+    if num_qubits == 1:
+        return tuple(status)
+    tail_slice = _get_projector_slice_cached(num_level, project_status[1:])
+    return tuple(
+        x + s * num_level ** (num_qubits - 1) for s in status for x in tail_slice
+    )
+
+
 def _get_projector_slice(
     num_level: int,
     project_status: ProjectSpaces,
 ) -> List[int]:
     """Get slice into the matrix for the subspace projection defined by project_status."""
-    num_qubits = len(project_status)
-    status = project_status[0]
-    if num_qubits == 1:
-        return list(status)
-    tail_slice = _get_projector_slice(num_level, project_status[1:])
-    return [x + s * num_level ** (num_qubits - 1) for s in status for x in tail_slice]
+    return list(_get_projector_slice_cached(num_level, project_status))
 
 
 def _project_kraus_with_initial_final(
@@ -140,14 +156,15 @@ def _project_kraus_with_initial_final(
     final_project_status: ProjectSpaces,
 ) -> np.ndarray:
     assert kraus.shape[0] == num_level**num_qubits
-    initial_slice = _get_projector_slice(num_level, initial_project_status)
-    final_slice = _get_projector_slice(num_level, final_project_status)
+    initial_slice = _get_projector_slice_cached(num_level, initial_project_status)
+    final_slice = _get_projector_slice_cached(num_level, final_project_status)
     return kraus[final_slice, :][:, initial_slice]
 
 
+@functools.lru_cache(maxsize=None)
 def _scatter_status(
     initial: LeakageSpaces, final: LeakageSpaces
-) -> List[Tuple[ProjectSpaces, ProjectSpaces]]:
+) -> Tuple[Tuple[ProjectSpaces, ProjectSpaces], ...]:
     initial_project_status = _l2p(initial)
     final_project_status = _l2p(final)
 
@@ -178,4 +195,4 @@ def _scatter_status(
             ]
         )
     )
-    return list(itertools.product(initial_combinations, final_combinations))
+    return tuple(itertools.product(initial_combinations, final_combinations))
