@@ -18,10 +18,60 @@ stim::GateType parse_gate_type(std::string_view gate_name) {
     return stim::GATE_DATA.at(gate_name).id;
 }
 
+std::optional<stim::GateTarget> try_reconstruct_gate_target_from_python(const pybind11::handle& obj) {
+    auto py_obj = py::reinterpret_borrow<py::object>(obj);
+    if (!py::hasattr(py_obj, "is_combiner")) {
+        return std::nullopt;
+    }
+
+    auto get_bool_attr = [&](const char* attr_name) -> bool {
+        return py::cast<bool>(py_obj.attr(attr_name));
+    };
+
+    try {
+        if (get_bool_attr("is_combiner")) {
+            return stim::GateTarget::combiner();
+        }
+        if (get_bool_attr("is_measurement_record_target")) {
+            return stim::GateTarget::rec(py::cast<int32_t>(py_obj.attr("value")));
+        }
+        if (get_bool_attr("is_sweep_bit_target")) {
+            return stim::GateTarget::sweep_bit(py::cast<uint32_t>(py_obj.attr("value")));
+        }
+
+        auto qubit = py::cast<uint32_t>(py_obj.attr("qubit_value"));
+        bool inverted = py::hasattr(py_obj, "is_inverted_result_target")
+            ? py::cast<bool>(py_obj.attr("is_inverted_result_target"))
+            : false;
+
+        if (get_bool_attr("is_x_target")) {
+            return stim::GateTarget::x(qubit, inverted);
+        }
+        if (get_bool_attr("is_y_target")) {
+            return stim::GateTarget::y(qubit, inverted);
+        }
+        if (get_bool_attr("is_z_target")) {
+            return stim::GateTarget::z(qubit, inverted);
+        }
+        if (get_bool_attr("is_qubit_target")) {
+            return stim::GateTarget::qubit(qubit, inverted);
+        }
+    } catch (const pybind11::cast_error& ex) {
+        return std::nullopt;
+    } catch (const pybind11::error_already_set& ex) {
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
 stim::GateTarget handle_to_gate_target(const pybind11::handle& obj) {
     try {
         return py::cast<stim::GateTarget>(obj);
     } catch (const pybind11::cast_error &ex) {
+    }
+    if (auto reconstructed = try_reconstruct_gate_target_from_python(obj)) {
+        return *reconstructed;
     }
     try {
         return stim::GateTarget{py::cast<uint32_t>(obj)};
