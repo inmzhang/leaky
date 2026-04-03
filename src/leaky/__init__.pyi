@@ -17,6 +17,10 @@ def randomize() -> None:
     """
     Choose a random seed using `std::random_device`.
 
+    This only affects module-level randomness such as `leaky.rand_float(...)`
+    and `LeakyPauliChannel.sample(...)`. Each `Simulator` instance owns its
+    own RNG.
+
     Examples:
         >>> import leaky
         >>> leaky.randomize()
@@ -25,10 +29,15 @@ def randomize() -> None:
 
 def set_seed(seed: int) -> None:
     """
-    Set the random seed used by the simulator.
+    Set the module-level random seed.
 
     Args:
         seed: The seed to use.
+
+    Notes:
+        This affects module-level randomness such as `leaky.rand_float(...)`
+        and `LeakyPauliChannel.sample(...)`. It does not mutate the RNG state
+        of existing or future `Simulator` instances.
 
     Examples:
         >>> import leaky
@@ -313,6 +322,10 @@ class LeakyPauliChannel:
                 with the transition.
             probability: The probability of the transition.
 
+        Notes:
+            The width of `from_status`, `to_status`, and `pauli_operator` must
+            match the channel's `num_qubits`.
+
         Examples:
             >>> from leaky import LeakyPauliChannel, LeakageStatus
             >>> channel = LeakyPauliChannel(2)
@@ -352,6 +365,10 @@ class LeakyPauliChannel:
         Returns:
             A `Transition` object representing the sampled transition or None if
             no transition is available from the initial status.
+
+        Notes:
+            This method uses the module-level RNG controlled by
+            `leaky.set_seed(...)` and `leaky.randomize()`.
 
         Examples:
             >>> from leaky import LeakyPauliChannel, LeakageStatus
@@ -411,7 +428,7 @@ class Simulator:
                 instruction which is in the form of `I[leaky<n>] q0 q1 ...` where
                 `leaky<n>` is the special leaky tag, `n` is the index of the
                 channel in the list.
-            seed: The random seed to use for the simulator.
+            seed: The random seed to use for this simulator instance only.
 
         Examples:
             >>> import leaky
@@ -424,10 +441,9 @@ class Simulator:
 
         Args:
             circuit: The `stim.Circuit` to simulate. Incoherent leakage transitions
-                should be added to the circuit in the form of `I[leaky<n>] q0 q1 ...`
-                where `leaky<n>` is the special leaky tag, `n` is the index of
-                the channel in the list `leaky_channels` passed to the simulator
-                constructor.
+                should be added to the circuit in the exact form
+                `I[leaky<n>] q0 q1 ...`, where `n` is the index of the channel in
+                the list `leaky_channels` passed to the simulator constructor.
         """
         ...
 
@@ -458,12 +474,10 @@ class Simulator:
         """Simulate a quantum channel with incoherent leakage transitions.
 
         Args:
-            targets: The objects operated on by the gate. This is an iterable of multiple
-                targets to broadcast the gate over. Each target can be an integer (a qubit),
-                a stim.GateTarget, or a special target from one of the `stim.target_*`
-                methods (such as a measurement record target like `rec[-1]` from
-                `stim.target_rec(-1)`). The targets will be grouped into groups
-                that have the same number of qubits as the channel expects.
+            targets: The qubits operated on by the channel. Each target must be
+                either an integer qubit index or a raw `stim.GateTarget` qubit
+                target. The targets will be grouped into groups that have the
+                same number of qubits as the channel expects.
             channel: The leaky channel to apply.
         """
         ...
@@ -490,6 +504,11 @@ class Simulator:
 
         Returns:
             The measurement record.
+
+        Notes:
+            When a measurement result depends on multiple qubits, such as `MPP`,
+            `ReadoutStrategy.RawLabel` uses the maximum leakage level among the
+            measured qubits as the returned leakage label.
 
         Examples:
             >>> import leaky

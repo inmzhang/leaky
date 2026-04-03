@@ -36,7 +36,10 @@ void leaky_pybind::pybind_channel_methods(py::module &m, py::class_<leaky::Leaky
         py::arg("from_status"),
         py::arg("to_status"),
         py::arg("pauli_operator"));
-    c.def("sample", &leaky::LeakyPauliChannel::sample, py::arg("initial_status"));
+    c.def(
+        "sample",
+        py::overload_cast<leaky::LeakageStatus>(&leaky::LeakyPauliChannel::sample, py::const_),
+        py::arg("initial_status"));
     c.def("safety_check", &leaky::LeakyPauliChannel::safety_check);
     c.def("__str__", &leaky::LeakyPauliChannel::str);
 }

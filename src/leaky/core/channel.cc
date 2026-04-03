@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <optional>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -28,88 +28,164 @@ leaky::Transition::Transition(LeakageStatus to_status, std::string_view pauli_op
     : to_status(std::move(to_status)), pauli_operator(pauli_operator) {
 }
 
+leaky::WeightedTransition::WeightedTransition(
+    LeakageStatus to_status, std::string_view pauli_operator, double probability)
+    : transition(std::move(to_status), pauli_operator), probability(probability) {
+}
+
+leaky::TransitionBucket::TransitionBucket(LeakageStatus initial_status)
+    : initial_status(std::move(initial_status)), weighted_transitions(), cumulative_probs(), cumulative_probs_valid(true) {
+}
+
+double leaky::TransitionBucket::total_probability() const {
+    double total = 0.0;
+    for (const auto& weighted_transition : weighted_transitions) {
+        total += weighted_transition.probability;
+    }
+    return total;
+}
+
+void leaky::TransitionBucket::rebuild_cumulative_probs() const {
+    cumulative_probs.clear();
+    cumulative_probs.reserve(weighted_transitions.size());
+    double cumulative_probability = 0.0;
+    for (const auto& weighted_transition : weighted_transitions) {
+        cumulative_probability += weighted_transition.probability;
+        cumulative_probs.push_back(cumulative_probability);
+    }
+    cumulative_probs_valid = true;
+}
+
 leaky::LeakyPauliChannel::LeakyPauliChannel(size_t num_qubits)
-    : initial_status_vec(0), transitions(0), cumulative_probs(0), num_qubits(num_qubits) {
+    : buckets(), num_qubits(num_qubits), bucket_indices() {
+}
+
+std::string leaky::LeakyPauliChannel::encode_status(const LeakageStatus& status) {
+    return std::string(status.s.begin(), status.s.end());
+}
+
+const leaky::TransitionBucket* leaky::LeakyPauliChannel::find_bucket(const LeakageStatus& initial_status) const {
+    auto it = bucket_indices.find(encode_status(initial_status));
+    if (it == bucket_indices.end()) {
+        return nullptr;
+    }
+    return &buckets[it->second];
+}
+
+leaky::TransitionBucket& leaky::LeakyPauliChannel::get_or_create_bucket(const LeakageStatus& initial_status) {
+    auto key = encode_status(initial_status);
+    auto it = bucket_indices.find(key);
+    if (it != bucket_indices.end()) {
+        return buckets[it->second];
+    }
+
+    auto bucket_index = buckets.size();
+    buckets.emplace_back(initial_status);
+    bucket_indices.emplace(std::move(key), bucket_index);
+    return buckets.back();
 }
 
 void leaky::LeakyPauliChannel::add_transition(
     LeakageStatus from, LeakageStatus to, std::string_view pauli_operator, double probability) {
-    if ((from.num_qubits != to.num_qubits) || (from.num_qubits != pauli_operator.length())) {
+    if (num_qubits == 0) {
+        throw std::invalid_argument("A leaky channel must act on at least one qubit.");
+    }
+    if (from.num_qubits != num_qubits || to.num_qubits != num_qubits || pauli_operator.length() != num_qubits) {
         throw std::invalid_argument(
-            "The number of qubits in `from` and `to` status should both be equal to the length of the pauli operator.");
+            "Transition width must match the channel width and the Pauli operator length.");
+    }
+    if (!std::isfinite(probability) || probability < 0.0) {
+        throw std::invalid_argument("Transition probability must be a finite non-negative number.");
     }
 
-    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), from);
-    if (it != initial_status_vec.end()) {
-        auto idx = std::distance(initial_status_vec.begin(), it);
-        transitions[idx].emplace_back(to, pauli_operator);
-        auto &probs = cumulative_probs[idx];
-        auto cum_prob = probs.back() + probability;
-        if (cum_prob - 1.0 > 1e-6) {
-            std::string error_msg =
-                "sum of probabilities for each initial status should not exceed 1, but get " + std::to_string(cum_prob);
-            throw std::runtime_error(error_msg);
-        }
-        probs.push_back(cum_prob);
-    } else {
-        initial_status_vec.push_back(from);
-        transitions.push_back(std::vector<Transition>{Transition{to, pauli_operator}});
-        cumulative_probs.push_back(std::vector<double>{probability});
+    auto& bucket = get_or_create_bucket(from);
+    auto total_probability = bucket.total_probability();
+    auto next_total_probability = total_probability + probability;
+    if (next_total_probability - 1.0 > 1e-6) {
+        throw std::runtime_error(
+            "sum of probabilities for each initial status should not exceed 1, but get " +
+            std::to_string(next_total_probability));
     }
+
+    auto existing_transition = std::find_if(
+        bucket.weighted_transitions.begin(),
+        bucket.weighted_transitions.end(),
+        [&](const auto& weighted_transition) {
+            return weighted_transition.transition.to_status == to &&
+                   weighted_transition.transition.pauli_operator == pauli_operator;
+        });
+
+    if (existing_transition != bucket.weighted_transitions.end()) {
+        existing_transition->probability += probability;
+    } else {
+        bucket.weighted_transitions.emplace_back(to, pauli_operator, probability);
+    }
+    bucket.cumulative_probs_valid = false;
 }
 
 double leaky::LeakyPauliChannel::get_prob_from_to(
     LeakageStatus from, LeakageStatus to, std::string_view pauli_operator) const {
-    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), from);
-    if (it == initial_status_vec.end()) {
+    if (from.num_qubits != num_qubits || to.num_qubits != num_qubits || pauli_operator.length() != num_qubits) {
+        throw std::invalid_argument(
+            "Transition width must match the channel width and the Pauli operator length.");
+    }
+
+    auto bucket = find_bucket(from);
+    if (bucket == nullptr) {
         return 0.0;
     }
-    auto idx = std::distance(initial_status_vec.begin(), it);
-    auto &transitions_vec = transitions[idx];
-    auto &probs = cumulative_probs[idx];
-    auto it2 = std::find_if(transitions_vec.begin(), transitions_vec.end(), [to, pauli_operator](auto &trans) {
-        return trans.to_status == to && trans.pauli_operator == pauli_operator;
-    });
-    if (it2 == transitions_vec.end()) {
-        return 0.0;
+
+    for (const auto& weighted_transition : bucket->weighted_transitions) {
+        if (weighted_transition.transition.to_status == to &&
+            weighted_transition.transition.pauli_operator == pauli_operator) {
+            return weighted_transition.probability;
+        }
     }
-    auto idx2 = std::distance(transitions_vec.begin(), it2);
-    auto prob = idx2 == 0 ? probs[idx2] : probs[idx2] - probs[idx2 - 1];
-    return prob;
+    return 0.0;
 }
 
 std::optional<leaky::Transition> leaky::LeakyPauliChannel::sample(LeakageStatus initial_status) const {
-    auto it = std::find(initial_status_vec.begin(), initial_status_vec.end(), initial_status);
-    if (it == initial_status_vec.end()) {
+    return sample(std::move(initial_status), leaky::global_urng());
+}
+
+std::optional<leaky::Transition> leaky::LeakyPauliChannel::sample(
+    LeakageStatus initial_status, std::mt19937_64& rng) const {
+    if (initial_status.num_qubits != num_qubits) {
+        throw std::invalid_argument("Initial status width must match the channel width.");
+    }
+
+    auto bucket = find_bucket(initial_status);
+    if (bucket == nullptr || bucket->weighted_transitions.empty()) {
         return std::nullopt;
     }
-    auto idx = std::distance(initial_status_vec.begin(), it);
-    auto &probabilities = cumulative_probs[idx];
-    auto rand_num = leaky::rand_float(0.0, probabilities.back());
-    auto it2 = std::upper_bound(probabilities.begin(), probabilities.end(), rand_num);
-    auto idx2 = std::distance(probabilities.begin(), it2);
-    return {transitions[idx][idx2]};
+
+    if (!bucket->cumulative_probs_valid) {
+        bucket->rebuild_cumulative_probs();
+    }
+
+    auto rand_num = leaky::rand_float(0.0, bucket->cumulative_probs.back(), rng);
+    auto it = std::lower_bound(bucket->cumulative_probs.begin(), bucket->cumulative_probs.end(), rand_num);
+    auto idx = std::distance(bucket->cumulative_probs.begin(), it);
+    return bucket->weighted_transitions[idx].transition;
 }
 
 /// Do safety check for the channel
 /// Check if the sum of probabilities for each initial status is 1
 /// Check if the attached pauli of transitions for the qubits in D/U/L is I
 void leaky::LeakyPauliChannel::safety_check() const {
-    for (size_t i = 0; i < initial_status_vec.size(); i++) {
-        auto initial_status = initial_status_vec[i];
-        auto &transitions_from_initial = transitions[i];
-        auto &probs = cumulative_probs[i];
-        if (std::fabs(probs.back() - 1.0) > 1e-6) {
+    for (const auto& bucket : buckets) {
+        auto total_probability = bucket.total_probability();
+        if (std::fabs(total_probability - 1.0) > 1e-6) {
             throw std::runtime_error(
                 "The sum of probabilities for each initial status should be 1, but get " +
-                std::to_string(probs.back()));
+                std::to_string(total_probability));
         }
-        for (const auto &trans : transitions_from_initial) {
-            for (auto i = 0; i < initial_status.num_qubits; i++) {
-                uint8_t from = initial_status.get(i);
-                uint8_t to = trans.to_status.get(i);
+        for (const auto& weighted_transition : bucket.weighted_transitions) {
+            for (size_t i = 0; i < bucket.initial_status.num_qubits; i++) {
+                uint8_t from = bucket.initial_status.get(i);
+                uint8_t to = weighted_transition.transition.to_status.get(i);
                 auto transition_type = leaky::get_transition_type(from, to);
-                char pauli = trans.pauli_operator[i];
+                char pauli = weighted_transition.transition.pauli_operator[i];
                 if (transition_type != leaky::TransitionType::R && pauli != 'I') {
                     throw std::runtime_error("The attached pauli of transitions for the qubits in D/U/L should be I");
                 }
@@ -120,8 +196,8 @@ void leaky::LeakyPauliChannel::safety_check() const {
 
 size_t leaky::LeakyPauliChannel::num_transitions() const {
     size_t count = 0;
-    for (size_t i = 0; i < initial_status_vec.size(); i++) {
-        count += transitions[i].size();
+    for (const auto& bucket : buckets) {
+        count += bucket.weighted_transitions.size();
     }
     return count;
 }
@@ -129,18 +205,15 @@ size_t leaky::LeakyPauliChannel::num_transitions() const {
 std::string leaky::LeakyPauliChannel::str() const {
     std::stringstream out;
     out << "Transitions:\n";
-    for (size_t i = 0; i < initial_status_vec.size(); i++) {
-        const auto &from_status = initial_status_vec[i];
-        std::string from_status_str = from_status.str();
-        for (size_t j = 0; j < transitions[i].size(); j++) {
-            auto prob = j == 0 ? cumulative_probs[i][j] : cumulative_probs[i][j] - cumulative_probs[i][j - 1];
-            const auto &trans = transitions[i][j];
-            auto to_status_str = trans.to_status.str();
-            out << "    " << from_status_str << " --" << trans.pauli_operator << "--> " << to_status_str << ": " << prob
-                << ",\n";
+    for (const auto& bucket : buckets) {
+        std::string from_status_str = bucket.initial_status.str();
+        for (const auto& weighted_transition : bucket.weighted_transitions) {
+            auto to_status_str = weighted_transition.transition.to_status.str();
+            out << "    " << from_status_str << " --" << weighted_transition.transition.pauli_operator << "--> "
+                << to_status_str << ": " << weighted_transition.probability << ",\n";
         }
     }
-    if (initial_status_vec.empty()) {
+    if (buckets.empty()) {
         out << "   None\n";
     }
     return out.str();

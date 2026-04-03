@@ -49,6 +49,7 @@ set(SOURCE_FILES_NO_MAIN
 
 set(TEST_FILES
         src/leaky/core/channel_test.cc
+        src/leaky/core/status_test.cc
         )
 
 set(PYTHON_API_FILES

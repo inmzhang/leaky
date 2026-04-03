@@ -101,12 +101,12 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - run: CC=gcc CXX=g++ cmake .
+      - run: CC=gcc CXX=g++ cmake -S . -B build-gtest
         if: matrix.os == 'ubuntu-latest'
-      - run: cmake .
+      - run: cmake -S . -B build-gtest
         if: matrix.os == 'macos-latest'
-      - run: make leaky_tests
-      - run: ./leaky_tests
+      - run: cmake --build build-gtest --target leaky_tests
+      - run: ./build-gtest/leaky_tests
   pip_install:
     strategy:
       fail-fast: false
@@ -132,7 +132,7 @@ jobs:
         run: python -m pip install --verbose -e .
 
       - name: Test with pytest
-        run: python -m pytest src/leaky
+        run: python -m pytest
 
   upload_pypi:
     needs: [build_wheels, build_sdist]

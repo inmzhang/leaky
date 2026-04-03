@@ -46,7 +46,7 @@ TEST(channel, add_transition_1q) {
     add_1q_trans_helper(channel, 1, 0, "I", 0.5);
     add_1q_trans_helper(channel, 1, 1, "I", 0.3);
     add_1q_trans_helper(channel, 1, 2, "I", 0.2);
-    ASSERT_EQ(channel.initial_status_vec.size(), 2);
+    ASSERT_EQ(channel.buckets.size(), 2);
     assert_1q_prob_helper(channel, 0, 0, "I", 0.2);
     assert_1q_prob_helper(channel, 0, 0, "X", 0.3);
     assert_1q_prob_helper(channel, 0, 1, "I", 0.15);
@@ -75,7 +75,7 @@ TEST(channel, add_transition_2q) {
     channel.add_transition(s1, s1, "XY", 0.7);
     channel.add_transition(s1, s2, "ZI", 0.3);
     channel.add_transition(s2, s3, "II", 1.0);
-    ASSERT_EQ(channel.initial_status_vec.size(), 2);
+    ASSERT_EQ(channel.buckets.size(), 2);
     ASSERT_FLOAT_EQ(channel.get_prob_from_to(s1, s1, "XY"), 0.7);
     ASSERT_FLOAT_EQ(channel.get_prob_from_to(s1, s2, "ZI"), 0.3);
     ASSERT_FLOAT_EQ(channel.get_prob_from_to(s2, s3, "II"), 1.0);
@@ -84,4 +84,20 @@ TEST(channel, add_transition_2q) {
     |C⟩|C⟩ --ZI--> |C⟩|2⟩: 0.3,
     |C⟩|2⟩ --II--> |2⟩|C⟩: 1,
 )");
+}
+
+TEST(channel, duplicate_transitions_are_aggregated) {
+    auto channel = LeakyPauliChannel(1);
+    add_1q_trans_helper(channel, 0, 0, "X", 0.25);
+    add_1q_trans_helper(channel, 0, 0, "X", 0.5);
+
+    ASSERT_EQ(channel.num_transitions(), 1);
+    assert_1q_prob_helper(channel, 0, 0, "X", 0.75);
+}
+
+TEST(channel, add_transition_width_mismatch_throws) {
+    auto channel = LeakyPauliChannel(2);
+    ASSERT_THROW(channel.add_transition(LeakageStatus(1), LeakageStatus(1), "I", 1.0), std::invalid_argument);
+    ASSERT_THROW(channel.get_prob_from_to(LeakageStatus(1), LeakageStatus(1), "I"), std::invalid_argument);
+    ASSERT_THROW(channel.sample(LeakageStatus(1)), std::invalid_argument);
 }

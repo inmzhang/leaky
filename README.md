@@ -40,12 +40,13 @@ leak_to = leaky.LeakageStatus(status=[0, 1])
 
 # |C⟩|C⟩ -> |C⟩|2⟩ with associated Pauli operator X on the first qubit
 channel_2q.add_transition(leak_from, leak_to, "XI", 1.0)
-s = leaky.Simulator(4, [channel_2q])
+s = leaky.Simulator(4, [channel_2q], seed=1234)
 
-# The leakage channel can be annotated in the circuit with a special tag `leaky<n>`
-# attached to the `I` instruction, where `n` represents the nth channel bound to the
-# simulator during initialization. The channel will be broadcast to the targets
-# of the `I` instruction based on the channel dimensions.
+# The leakage channel can be annotated in the circuit with the exact tag
+# `leaky<n>` attached to the `I` instruction, where `n` represents the nth
+# channel bound to the simulator during initialization. The channel will be
+# broadcast to the targets of the `I` instruction based on the channel
+# dimensions.
 circuit = stim.Circuit("""
 R 0 1 2 3
 X 0 2
@@ -58,8 +59,18 @@ assert len(s.leaky_channels) == 1
 assert s.current_measurement_record().tolist() == [0, 2, 0, 2]
 
 # Another way to apply the leakage channel is by calling `apply_leaky_channel` method
+# with raw qubit targets.
 s.apply_leaky_channel([1, 2], channel_2q)
 ```
+
+`Simulator(seed=...)` only seeds that simulator instance. It does not mutate the
+module-level RNG used by helpers such as `leaky.rand_float(...)` and
+`LeakyPauliChannel.sample(...)`.
+
+For multi-qubit measurements such as `MPP`, `current_measurement_record()` and
+`sample(...)` still return one entry per produced measurement result. Under
+`ReadoutStrategy.RawLabel`, a leaked multi-qubit result is labeled using the
+maximum leakage level among the measured qubits.
 
 ## API References
 

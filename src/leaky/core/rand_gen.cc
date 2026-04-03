@@ -17,7 +17,11 @@ void leaky::set_seed(unsigned seed) {
 }
 
 double leaky::rand_float(double begin, double end) {
+    return rand_float(begin, end, global_urng());
+}
+
+double leaky::rand_float(double begin, double end, std::mt19937_64& rng) {
     static std::uniform_real_distribution<> d{};
     using parm_t = decltype(d)::param_type;
-    return d(global_urng(), parm_t{begin, end});
+    return d(rng, parm_t{begin, end});
 }

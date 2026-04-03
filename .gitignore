@@ -14,3 +14,14 @@ cmake-build-*
 *.so
 out
 compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+Makefile
+_deps/
+cmake_install.cmake
+cmake_test_discovery_*.json
+leaky_tests
+leaky_tests*_include.cmake
+leaky_tests*_tests.cmake
+lib/

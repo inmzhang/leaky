@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
 from shutil import which
@@ -29,6 +30,22 @@ class CMakeExtension(Extension):
 
 
 class CMakeBuild(build_ext):
+    @staticmethod
+    def _read_cmake_cache(cache_path):
+        cache = {}
+        if not os.path.exists(cache_path):
+            return cache
+        with open(cache_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("//") or line.startswith("#"):
+                    continue
+                if ":" not in line or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                cache[key.split(":", 1)[0]] = value
+        return cache
+
     def build_extension(self, ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
@@ -129,12 +146,23 @@ class CMakeBuild(build_ext):
                 build_args += [f"-j{self.parallel}"]
 
         build_temp = os.path.join(self.build_temp, ext.name)
-        if not os.path.exists(build_temp):
-            os.makedirs(build_temp)
-        subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=build_temp)
+        os.makedirs(build_temp, exist_ok=True)
+        cache = self._read_cmake_cache(os.path.join(build_temp, "CMakeCache.txt"))
+        requested_generator = cmake_generator or ("Ninja" if any(arg == "-GNinja" for arg in cmake_args) else "")
+        cached_generator = cache.get("CMAKE_GENERATOR", "")
+        cached_make_program = cache.get("CMAKE_MAKE_PROGRAM", "")
+        cached_python = cache.get("PYTHON_EXECUTABLE", "") or cache.get("_Python_EXECUTABLE", "")
+        stale_cache = (
+            (requested_generator and cached_generator and cached_generator != requested_generator)
+            or (cached_make_program and not os.path.exists(cached_make_program))
+            or (cached_python and os.path.realpath(cached_python) != os.path.realpath(sys.executable))
+        )
+        if stale_cache:
+            shutil.rmtree(build_temp)
+            os.makedirs(build_temp, exist_ok=True)
+        subprocess.check_call(["cmake", "-S", ext.sourcedir, "-B", build_temp] + cmake_args)
         subprocess.check_call(
-            ["cmake", "--build", ".", "--target", "_cpp_leaky"] + build_args,
-            cwd=build_temp,
+            ["cmake", "--build", build_temp, "--target", "_cpp_leaky"] + build_args,
         )
 
 

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <optional>
 #include <pybind11/cast.h>
 #include <pybind11/detail/common.h>
 #include <pybind11/pytypes.h>
@@ -17,7 +18,7 @@ stim::GateType parse_gate_type(std::string_view gate_name) {
     return stim::GATE_DATA.at(gate_name).id;
 }
 
-stim::GateTarget handle_to_gate_target(const pybind11::handle &obj) {
+stim::GateTarget handle_to_gate_target(const pybind11::handle& obj) {
     try {
         return py::cast<stim::GateTarget>(obj);
     } catch (const pybind11::cast_error &ex) {
@@ -30,18 +31,27 @@ stim::GateTarget handle_to_gate_target(const pybind11::handle &obj) {
         "target argument wasn't a qubit index, a result from a `stim.target_*` method, or a `stim.GateTarget`.");
 }
 
+stim::GateTarget handle_to_qubit_gate_target(const pybind11::handle& obj) {
+    auto target = handle_to_gate_target(obj);
+    if (!target.is_qubit_target()) {
+        throw std::invalid_argument(
+            "target argument wasn't a raw qubit target. `apply_leaky_channel` only accepts integers or "
+            "`stim.GateTarget(qubit)` values.");
+    }
+    return target;
+}
+
 py::class_<leaky::Simulator> leaky_pybind::pybind_simulator(py::module &m) {
     return {m, "Simulator"};
 }
 
 leaky::Simulator create_simulator(
     size_t num_qubits, std::vector<leaky::LeakyPauliChannel> leaky_channels, const pybind11::object &seed) {
+    std::optional<uint64_t> simulator_seed;
     if (!seed.is_none()) {
-        leaky::set_seed(seed.cast<unsigned>());
-    } else {
-        leaky::randomize();
+        simulator_seed = seed.cast<uint64_t>();
     }
-    return leaky::Simulator(num_qubits, leaky_channels);
+    return leaky::Simulator(num_qubits, leaky_channels, simulator_seed);
 }
 
 void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Simulator> &s) {
@@ -90,24 +100,18 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
            const leaky::LeakyPauliChannel &channel) {
             auto targets = std::vector<stim::GateTarget>();
             for (const auto &obj : target_objs) {
-                targets.push_back(handle_to_gate_target(obj));
+                targets.push_back(handle_to_qubit_gate_target(obj));
             }
             self.apply_leaky_channel({targets}, channel);
         },
         py::arg("targets"),
-        py::arg("leaky_channel"));
+        py::arg("channel"));
     s.def("clear", &leaky::Simulator::clear);
     s.def(
         "current_measurement_record",
         [](leaky::Simulator &self, leaky::ReadoutStrategy readout_strategy) {
-            auto record_ = self.current_measurement_record(readout_strategy);
-            std::vector<uint8_t> *record_vec = new std::vector<uint8_t>();
-            std::move(record_.begin(), record_.end(), std::back_inserter(*record_vec));
-            auto record_capsule = py::capsule(record_vec, [](void *record) {
-                delete reinterpret_cast<std::vector<uint8_t> *>(record);
-            });
-            py::array_t<uint8_t> record_arr =
-                py::array_t<uint8_t>(record_vec->size(), record_vec->data(), record_capsule);
+            py::array_t<uint8_t> record_arr(self.leakage_masks_record.size());
+            self.append_measurement_record_into(record_arr.mutable_data(), readout_strategy);
             return record_arr;
         },
         py::arg("readout_strategy") = leaky::ReadoutStrategy::RawLabel);
@@ -117,21 +121,21 @@ void leaky_pybind::pybind_simulator_methods(py::module &m, py::class_<leaky::Sim
            const py::object &circuit,
            py::ssize_t shots,
            leaky::ReadoutStrategy readout_strategy) {
+            if (shots < 0) {
+                throw std::invalid_argument("shots must be non-negative.");
+            }
             auto circuit_str = pybind11::cast<std::string>(pybind11::str(circuit));
             stim::Circuit converted_circuit = stim::Circuit(circuit_str.c_str()).flattened();
-            auto num_measurements = converted_circuit.count_measurements();
-            // Allocate memory for the results
-            py::array_t<uint8_t> results = py::array_t<uint8_t>(shots * num_measurements);
-            results[py::make_tuple(py::ellipsis())] = 0;
-            py::buffer_info buff = results.request();
-            uint8_t *results_ptr = (uint8_t *)buff.ptr;
+            auto num_measurements = static_cast<py::ssize_t>(converted_circuit.count_measurements());
+            py::array_t<uint8_t> results({shots, num_measurements});
+            auto* results_ptr = results.mutable_data();
 
+            py::gil_scoped_release release;
             for (py::ssize_t i = 0; i < shots; i++) {
                 self.clear();
                 self.do_circuit(converted_circuit);
                 self.append_measurement_record_into(results_ptr + i * num_measurements, readout_strategy);
             }
-            results.resize({shots, (py::ssize_t)num_measurements});
             return results;
         },
         py::arg("circuit"),

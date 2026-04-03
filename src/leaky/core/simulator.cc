@@ -1,9 +1,12 @@
 #include "leaky/core/simulator.h"
 
+#include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cstddef>
 #include <optional>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -15,25 +18,59 @@
 
 using stim::GateType;
 
-std::optional<int> extract_leaky_channel_index(std::string_view tag) {
+namespace {
+
+uint64_t random_seed_from_device() {
+    static std::random_device rd{};
+    return (static_cast<uint64_t>(rd()) << 32) ^ static_cast<uint64_t>(rd());
+}
+
+std::mt19937_64 make_tableau_rng(std::optional<uint64_t> seed) {
+    return std::mt19937_64(seed.value_or(random_seed_from_device()));
+}
+
+std::mt19937_64 make_leakage_rng(std::optional<uint64_t> seed) {
+    constexpr uint64_t kLeakageSeedSalt = 0x9E3779B97F4A7C15ULL;
+    return std::mt19937_64(seed.has_value() ? (*seed ^ kLeakageSeedSalt) : random_seed_from_device());
+}
+
+std::optional<size_t> extract_leaky_channel_index(std::string_view tag) {
     constexpr std::string_view prefix = "leaky<";
-    auto pos = tag.find(prefix, 0);
-    if (pos == std::string_view::npos)
+    if (tag.empty() || !tag.starts_with(prefix)) {
         return std::nullopt;
-    size_t n_start = pos + prefix.size();
-    size_t n_end = n_start;
-    while (n_end < tag.size() && std::isdigit(tag[n_end]))
-        ++n_end;
-    if (n_end == n_start || tag[n_end] != '>') {
+    }
+
+    if (tag.back() != '>') {
         throw std::invalid_argument("Invalid leaky channel tag: " + std::string(tag));
     }
-    int number = 0;
+
+    size_t n_start = prefix.size();
+    size_t n_end = n_start;
+    while (n_end < tag.size() - 1 && std::isdigit(static_cast<unsigned char>(tag[n_end]))) {
+        ++n_end;
+    }
+    if (n_end == n_start || n_end != tag.size() - 1) {
+        throw std::invalid_argument("Invalid leaky channel tag: " + std::string(tag));
+    }
+
+    size_t number = 0;
     auto [ptr, ec] = std::from_chars(tag.data() + n_start, tag.data() + n_end, number);
-    if (ec == std::errc()) {
+    if (ec == std::errc() && ptr == tag.data() + n_end) {
         return number;
     }
     throw std::invalid_argument("Invalid leaky channel tag: " + std::string(tag));
 }
+
+void validate_qubit_targets(stim::SpanRef<const stim::GateTarget> targets, std::string_view context) {
+    for (const auto& target : targets) {
+        if (!target.is_qubit_target()) {
+            throw std::invalid_argument(
+                std::string(context) + " only supports raw qubit targets, but got " + target.target_str() + ".");
+        }
+    }
+}
+
+}  // namespace
 
 void leaky::Simulator::handle_transition(
     uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, std::string_view pauli) {
@@ -54,17 +91,62 @@ void leaky::Simulator::handle_transition(
             return;
     }
 }
-leaky::Simulator::Simulator(uint32_t num_qubits, std::vector<LeakyPauliChannel> leaky_channels)
+leaky::Simulator::Simulator(
+    uint32_t num_qubits, std::vector<LeakyPauliChannel> leaky_channels, std::optional<uint64_t> seed)
     : num_qubits(num_qubits),
       leakage_status(num_qubits),
-      leakage_masks_record(0),
-      tableau_simulator(std::mt19937_64(leaky::global_urng()), num_qubits),
+      leakage_masks_record(),
+      leakage_rng(make_leakage_rng(seed)),
+      tableau_simulator(make_tableau_rng(seed), num_qubits),
       leaky_channels(std::move(leaky_channels)) {
+}
+
+uint8_t leaky::Simulator::compute_group_leakage_mask(stim::SpanRef<const stim::GateTarget> group) const {
+    uint8_t leakage_mask = 0;
+    bool saw_qubit = false;
+    for (const auto& target : group) {
+        if (target.is_combiner()) {
+            continue;
+        }
+        if (!target.has_qubit_value()) {
+            throw std::invalid_argument(
+                "Result-producing instruction contains an unsupported non-qubit target: " + target.target_str() + ".");
+        }
+        saw_qubit = true;
+        leakage_mask = std::max(leakage_mask, leakage_status.get(target.qubit_value()));
+    }
+    return saw_qubit ? leakage_mask : 0;
+}
+
+void leaky::Simulator::append_result_masks(const stim::CircuitInstruction& inst) {
+    auto produced_results = inst.count_measurement_results();
+    if (produced_results == 0) {
+        return;
+    }
+    if (inst.gate_type == GateType::MPAD) {
+        leakage_masks_record.insert(leakage_masks_record.end(), produced_results, 0);
+        return;
+    }
+
+    auto starting_size = leakage_masks_record.size();
+    inst.for_combined_target_groups([&](std::span<const stim::GateTarget> group) {
+        leakage_masks_record.push_back(compute_group_leakage_mask(group));
+    });
+
+    auto appended_masks = leakage_masks_record.size() - starting_size;
+    if (appended_masks != produced_results) {
+        throw std::runtime_error(
+            "Internal error: result mask count does not match Stim's measurement count for instruction " + inst.str());
+    }
 }
 
 void leaky::Simulator::apply_leaky_channel(
     stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel) {
     auto step = channel.num_qubits;
+    if (step == 0) {
+        throw std::invalid_argument("A leaky channel must act on at least one qubit.");
+    }
+    validate_qubit_targets(targets, "apply_leaky_channel");
     if (targets.size() % step != 0) {
         throw std::invalid_argument(
             "The number of targets in the instruction should be a multiple of the number of qubits in the channel.");
@@ -75,12 +157,13 @@ void leaky::Simulator::apply_leaky_channel(
             auto qubit = targets[i + k].qubit_value();
             target_status.set(i, leakage_status.get(qubit));
         }
-        auto sample = channel.sample(target_status);
-        if (!sample.has_value())
-            return;
+        auto sample = channel.sample(target_status, leakage_rng);
+        if (!sample.has_value()) {
+            continue;
+        }
 
-        auto trans = sample.value();
-        auto pauli_operator = trans.pauli_operator;
+        const auto& trans = sample.value();
+        const auto& pauli_operator = trans.pauli_operator;
 
         for (size_t i = 0; i < step; ++i) {
             auto target = targets.sub(i + k, i + k + 1);
@@ -113,14 +196,15 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
     }
     // Encounter measurements: add leakage masks to the record
     if (flags & stim::GATE_PRODUCES_RESULTS) {
-        for (auto q : targets) {
-            leakage_masks_record.push_back(leakage_status.get(q.qubit_value()));
-        }
+        append_result_masks(inst);
     }
     // Encounter resets: reset the leakage status of the qubits
     if (flags & stim::GATE_IS_RESET) {
-        for (auto q : targets) {
-            leakage_status.set(q.qubit_value(), 0);
+        for (const auto& target : targets) {
+            if (!target.has_qubit_value()) {
+                throw std::invalid_argument("Reset instruction contains a non-qubit target: " + target.target_str() + ".");
+            }
+            leakage_status.reset(target.qubit_value());
         }
     }
     // Do measurements or resets
@@ -135,18 +219,36 @@ void leaky::Simulator::do_gate(const stim::CircuitInstruction& inst) {
         return;
     }
 
-    bool is_single_qubit_gate = flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
-    size_t step = is_single_qubit_gate ? 1 : 2;
-    for (size_t i = 0; i < targets.size(); i += step) {
-        auto split_targets = targets.sub(i, i + step);
-        stim::CircuitInstruction split_inst = {gate_type, inst.args, split_targets, {}};
-        // If all qubits are in the R state, we can apply the ideal gate.
-        bool is_leaked = is_single_qubit_gate ? leakage_status.is_leaked(split_targets[0].data)
-                                              : (leakage_status.is_leaked(split_targets[0].data) ||
-                                                 leakage_status.is_leaked(split_targets[1].data));
+    bool has_qubit_targets = std::any_of(targets.begin(), targets.end(), [](const auto& target) {
+        return target.has_qubit_value();
+    });
+    if (!has_qubit_targets) {
+        tableau_simulator.do_gate(inst);
+        return;
+    }
+
+    auto handle_ideal_gate_group = [&](std::span<const stim::GateTarget> group) {
+        stim::CircuitInstruction split_inst = {gate_type, inst.args, group, inst.tag};
+        bool is_leaked = std::any_of(group.begin(), group.end(), [&](const auto& target) {
+            return target.has_qubit_value() && leakage_status.is_leaked(target.qubit_value());
+        });
         if (!is_leaked) {
             tableau_simulator.do_gate(split_inst);
         }
+    };
+
+    if (flags & stim::GATE_TARGETS_COMBINERS) {
+        inst.for_combined_target_groups(handle_ideal_gate_group);
+        return;
+    }
+
+    bool is_single_qubit_gate = flags & stim::GATE_IS_SINGLE_QUBIT_GATE;
+    size_t step = is_single_qubit_gate ? 1 : 2;
+    if (targets.size() % step != 0) {
+        throw std::invalid_argument("Unsupported target grouping for ideal instruction: " + inst.str());
+    }
+    for (size_t i = 0; i < targets.size(); i += step) {
+        handle_ideal_gate_group(targets.sub(i, i + step));
     }
 }
 
@@ -182,22 +284,26 @@ std::vector<uint8_t> leaky::Simulator::current_measurement_record(ReadoutStrateg
 }
 
 void leaky::Simulator::append_measurement_record_into(uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy) {
-    auto tableau_record = tableau_simulator.measurement_record.storage;
+    const auto& tableau_record = tableau_simulator.measurement_record.storage;
 
     auto num_measurements = leakage_masks_record.size();
+    if (tableau_record.size() != num_measurements) {
+        throw std::runtime_error(
+            "Internal error: leakage masks and Stim measurement record have different lengths.");
+    }
     if (readout_strategy == ReadoutStrategy::RawLabel) {
-        for (auto i = 0; i < num_measurements; i++) {
+        for (size_t i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
             *(record_begin_ptr + i) = mask == 0 ? (uint8_t)tableau_record[i] : mask + 1;
         }
     } else if (readout_strategy == ReadoutStrategy::RandomLeakageProjection) {
-        for (auto i = 0; i < num_measurements; i++) {
+        for (size_t i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
             *(record_begin_ptr + i) =
-                mask == 0 ? (uint8_t)tableau_record[i] : (leaky::rand_float(0.0, 1.0) < 0.5 ? 0 : 1);
+                mask == 0 ? (uint8_t)tableau_record[i] : (leaky::rand_float(0.0, 1.0, leakage_rng) < 0.5 ? 0 : 1);
         }
     } else if (readout_strategy == ReadoutStrategy::DeterministicLeakageProjection) {
-        for (auto i = 0; i < num_measurements; i++) {
+        for (size_t i = 0; i < num_measurements; i++) {
             uint8_t mask = leakage_masks_record[i];
             *(record_begin_ptr + i) = mask == 0 ? (uint8_t)tableau_record[i] : 1;
         }

@@ -2,6 +2,8 @@
 #define LEAKY_SIMULATOR_H
 
 #include <cstdint>
+#include <optional>
+#include <random>
 #include <vector>
 
 #include "leaky/core/channel.h"
@@ -15,10 +17,14 @@ struct Simulator {
     uint32_t num_qubits;
     LeakageStatus leakage_status;
     std::vector<uint8_t> leakage_masks_record;
+    std::mt19937_64 leakage_rng;
     stim::TableauSimulator<stim::MAX_BITWORD_WIDTH> tableau_simulator;
     std::vector<LeakyPauliChannel> leaky_channels;
 
-    explicit Simulator(uint32_t num_qubits, std::vector<LeakyPauliChannel> leaky_channels = {});
+    explicit Simulator(
+        uint32_t num_qubits,
+        std::vector<LeakyPauliChannel> leaky_channels = {},
+        std::optional<uint64_t> seed = std::nullopt);
 
     void apply_leaky_channel(stim::SpanRef<const stim::GateTarget> targets, const LeakyPauliChannel& channel);
     void do_gate(const stim::CircuitInstruction& inst);
@@ -29,6 +35,8 @@ struct Simulator {
         uint8_t* record_begin_ptr, ReadoutStrategy readout_strategy = ReadoutStrategy::RawLabel);
 
    private:
+    void append_result_masks(const stim::CircuitInstruction& inst);
+    [[nodiscard]] uint8_t compute_group_leakage_mask(stim::SpanRef<const stim::GateTarget> group) const;
     void handle_transition(
         uint8_t cur_status, uint8_t next_status, stim::SpanRef<const stim::GateTarget> target, std::string_view pauli);
 };

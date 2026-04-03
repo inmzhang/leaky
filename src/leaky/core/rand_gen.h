@@ -23,6 +23,7 @@ void set_seed(unsigned seed);
  * @return double
  */
 double rand_float(double begin, double end);
+double rand_float(double begin, double end, std::mt19937_64 &rng);
 } // namespace leaky
 
 #endif // LEAKY_RAND_GEN_H

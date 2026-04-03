@@ -26,8 +26,6 @@ def test_get_projector_slice():
     assert _get_projector_slice(4, ((0, 1), (2,))) == [2, 6]
 
 
-P = 1e-2
-
 RNG = np.random.default_rng()
 
 
