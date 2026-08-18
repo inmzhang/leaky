@@ -2,6 +2,8 @@
 
 [![ci](https://github.com/inmzhang/leaky/actions/workflows/ci.yml/badge.svg)](https://github.com/inmzhang/leaky/actions/workflows/ci.yml)
 
+> **Archived:** This project is no longer maintained. Please use [Deltakit/deltakit-stim](https://github.com/Deltakit/deltakit-stim) instead.
+
 Leakage-aware stabilizer simulation built on top of `stim.TableauSimulator`.
 
 ## Install
